@@ -5,6 +5,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800;900&display=swap">
 <style>
 /* Layout: mundo de jogo noturno. Cena do avatar no topo, missões em cartões brilhantes, barra de abas flutuante embaixo. Tema único escuro, escolhido de propósito. */
+/* O app já é escuro. Declarar o tema escuro faz o Chrome e o Samsung Internet não forçarem o modo noturno por cima. */
+@media (prefers-color-scheme: dark){:root{color-scheme:only dark}}
+@media (prefers-color-scheme: light){:root{color-scheme:only dark}}
 :root{
   --bg:#130A26; --bg-2:#1B0F36;
   --card:#22164A; --card-2:#2E1F5E; --line:#43307F;
