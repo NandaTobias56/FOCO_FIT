@@ -1,0 +1,10 @@
+{
+  "appId": "app.focofit.maria",
+  "appName": "Foco Fit",
+  "webDir": "www",
+  "backgroundColor": "#130A26",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_focofit", "iconColor": "#FF4F9A" }
+  }
+}
