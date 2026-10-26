@@ -511,7 +511,7 @@ let pickPromise=null;
 
 function renderHoje(A,lv,st,tired){
   const k=view.day, t=todayKey(), i=dayInfo(k), d=i.d, p=S.profile;
-  let h=sceneHTML(A,lv,st,tired,i,speech(A,dayInfo(t),tired));
+  let h=updateBanner()+sceneHTML(A,lv,st,tired,i,speech(A,dayInfo(t),tired));
   h+=nowCard(i,k);
   /* dia */
   const minDay=addDays(t,-6), wk=weekKey(k); let wkH="";
@@ -641,8 +641,10 @@ function renderEvolucao(A,lv,st,tired){
     <button class="btn full" data-act="edit-avatar">Trocar personagem</button>
     <button class="btn full" data-act="edit-plan">Treinos e metas</button>
     <button class="btn full" data-act="backup">Backup dos dados</button>
+    ${window.FFNative?`<button class="btn full" data-act="check-update">Procurar atualização</button>`:""}
     <button class="btn full" data-act="som">Som: ${p.som===false?"desligado":"ligado"}</button>
     <button class="btn ghost full" data-act="reset" style="color:var(--red)">Apagar todos os dados</button></div>
+    ${window.FFNative&&window.FF_BUILD?`<p class="note" style="margin-bottom:-10px">Versão 1.${window.FF_BUILD}</p>`:""}
     <p class="note">XP: refeição +10 · treino +30 · cardio na meta +20 · água +10 · dia cumprido +20 · promessa +25 · doce vencido +15 · baú.<br>Um escudo por semana protege sua sequência num dia ruim.</p>`;
   return h;
 }
@@ -1003,6 +1005,8 @@ document.addEventListener("click",e=>{
       ds={result:DIETA().map(m=>({...m}))};openSheet(`<h2>Minha dieta e horários</h2><div id="ds-wrap">${dietSetupHTML(false)}</div><button class="btn ghost full" data-act="ds-reset">Refazer dieta (colar, foto ou IA)</button><button class="btn ghost full" data-close="1">Fechar</button>`);break}
     case "reminders":openSheet(`<h2>${window.FFNative?"Notificações":"Lembretes no celular"}</h2>${remindersHTML()}<button class="btn ghost full" data-close="1">Fechar</button>`);break;
     case "ics":downloadICS();break;
+    case "update":showUpdateSheet();break;
+    case "check-update":checkUpdate(true);break;
     case "backup":openSheet(`<h2>Backup dos dados</h2><div class="sub">Seus dados ficam guardados neste aparelho. Copie o backup e guarde (por exemplo, mande para você no WhatsApp). Para restaurar, cole aqui.</div>
       <button class="btn pink full" data-act="bk-copy">Copiar meu backup</button>
       <label class="f" for="bk-in">RESTAURAR: COLE O BACKUP AQUI<textarea id="bk-in" rows="4"></textarea></label>
@@ -1103,7 +1107,8 @@ async function syncNotifs(){
   if(!LN||!S.profile)return;
   try{
     const pend=await LN.getPending();
-    if(pend.notifications&&pend.notifications.length)await LN.cancel({notifications:pend.notifications.map(n=>({id:n.id}))});
+    const old=(pend.notifications||[]).filter(n=>n.id!==950&&n.id!==999);
+    if(old.length)await LN.cancel({notifications:old.map(n=>({id:n.id}))});
     const cfg=NT(); if(!cfg.on||notifPerm!=="granted")return;
     const list=[], hm=h=>{const n=horaNum(h);return {hour:Math.floor(n),minute:Math.round((n%1)*60)%60}};
     DIETA().forEach((m,i)=>list.push({id:100+i,channelId:"refeicoes",actionTypeId:"MEAL",title:mealTitle(m),
@@ -1134,6 +1139,7 @@ function onNotifTap(actionId,extra){
       <button class="btn ghost full" data-meal="${m.id}" data-s="pulei" data-close-after="1">Pulei</button>`);
     return;
   }
+  if(extra.kind==="update"){render();showUpdateSheet();return}
   if(extra.kind==="agua"&&actionId==="ok"){const d=day(t);d.agua=Math.min(20,(d.agua||0)+1);saveDay(t);reward(before,t);render();toast("+1 copo d’água");return}
   if(extra.kind==="treino"&&actionId==="ok"){const d=day(t);d.treino=true;saveDay(t);reward(before,t);render();return}
   render();
@@ -1153,10 +1159,44 @@ function notifSettingsHTML(){
     <button class="btn cyan full" data-act="notif-test">Testar agora (aviso em 5 segundos)</button>
     <div class="tip">Para mudar os horários, vá em Minha dieta e horários. Os avisos se ajustam sozinhos.</div></div>`;
 }
+/* aviso de versão nova (só no app Android) */
+const APK_URL="https://github.com/NandaTobias56/FOCO_FIT/releases/latest/download/foco-fit.apk";
+let newBuild=null; try{newBuild=+localStorage.getItem("focofit.newbuild")||null}catch(e){}
+const myBuild=()=>+(window.FF_BUILD||0);
+function updateBanner(){
+  if(!window.FFNative||!newBuild||newBuild<=myBuild())return "";
+  return `<button class="upd" data-act="update"><b>Versão nova disponível</b><span>Toque para baixar a 1.${newBuild}. Seus dados continuam.</span></button>`;
+}
+function showUpdateSheet(){
+  openSheet(`<h2>Atualizar o Foco Fit</h2><div class="sub">Versão 1.${newBuild||"nova"} disponível. Você está na 1.${myBuild()}.</div>
+    <ol class="tips"><li>Toque em <b>Baixar atualização</b>.</li><li>Abra o arquivo baixado e toque em <b>Atualizar</b>.</li><li>Pronto! Seus dados, XP e personagem continuam.</li></ol>
+    <a class="btn yellow big full" href="${APK_URL}" target="_blank" rel="noopener">Baixar atualização</a>
+    <button class="btn ghost full" data-close="1">Depois</button>`);
+}
+async function checkUpdate(force){
+  if(!window.FFNative||!myBuild())return;
+  try{
+    const last=+localStorage.getItem("focofit.updcheck")||0;
+    if(!force&&Date.now()-last<3*3600e3)return;
+    localStorage.setItem("focofit.updcheck",String(Date.now()));
+    const r=await fetch("https://api.github.com/repos/NandaTobias56/FOCO_FIT/releases/latest",{headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok)return;
+    const n=+String((await r.json()).tag_name||"").replace(/\D/g,"");
+    if(!n||n<=myBuild()){if(force)toast("Você já está na versão mais nova");return}
+    const was=newBuild; newBuild=n; localStorage.setItem("focofit.newbuild",String(n));
+    if(view.tab==="hoje"&&!$(".sheet"))render();
+    if(LN&&notifPerm==="granted"&&+localStorage.getItem("focofit.updnotified")!==n){
+      localStorage.setItem("focofit.updnotified",String(n));
+      await LN.schedule({notifications:[{id:950,channelId:"refeicoes",title:"Tem versão nova do Foco Fit",body:"Toque para atualizar. Seus dados continuam salvos.",schedule:{at:new Date(Date.now()+1500)},extra:{kind:"update"}}]});
+    }
+    if(force)showUpdateSheet();
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
 const refreshNotifSheet=()=>{const sh=$(".sheet");if(sh)sh.innerHTML=`<h2>Notificações</h2>${notifSettingsHTML()}<button class="btn ghost full" data-close="1">Fechar</button>`;else render()};
 
 lsLoad(); render();
-if(LN)notifSetup().then(()=>queueNotifSync(200));
+if(LN)notifSetup().then(()=>{queueNotifSync(200);checkUpdate()});
 try{const t=JSON.parse(localStorage.getItem("focofit.timer")||"null");if(t&&t.kind==="cardio"&&S.profile)startCardio(t.mins,t)}catch(e){}
 connectDb();
 })();

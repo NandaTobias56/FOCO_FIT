@@ -19,7 +19,7 @@ const head = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 </head><body>`;
 const page = r("head.html").replace(/<link rel="(preconnect|stylesheet)" href="https:\/\/fonts[^>]*>\n?/g, "");
 buildSync({entryPoints:[new URL("../src/native-entry.js", import.meta.url).pathname],bundle:true,format:"iife",minify:true,outfile:new URL("../www/native.js", import.meta.url).pathname});
-const html = head + page + "<script src=\"native.js\"></script>\n<script>\n" + r("consts.js") + r("logic.js") + "</script>\n<script>if(!window.FFNative&&location.protocol===\"https:\"&&\"serviceWorker\" in navigator)navigator.serviceWorker.register(\"sw.js\").catch(()=>{});</script>\n</body></html>\n";
+const html = head + page + "<script src=\"native.js\"></script>\n<script>window.FF_BUILD=" + JSON.stringify(process.env.GITHUB_RUN_NUMBER || "") + ";</script>\n<script>\n" + r("consts.js") + r("logic.js") + "</script>\n<script>if(!window.FFNative&&location.protocol===\"https:\"&&\"serviceWorker\" in navigator)navigator.serviceWorker.register(\"sw.js\").catch(()=>{});</script>\n</body></html>\n";
 writeFileSync(new URL("../www/index.html", import.meta.url), html);
 if (existsSync(new URL("../src/fonts", import.meta.url))) cpSync(new URL("../src/fonts", import.meta.url), new URL("../www/fonts", import.meta.url), {recursive: true});
 for (const f of ["manifest.webmanifest","icon-180.png","icon-192.png","icon-512.png"]) cpSync(new URL("../src/pwa/"+f, import.meta.url), new URL("../www/"+f, import.meta.url));
