@@ -28,6 +28,9 @@ const num = v=>{const n=parseFloat(String(v).replace(",","."));return isFinite(n
 const kg = n=>n.toFixed(1).replace(".",",");
 const reduced = ()=>{try{return matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){return false}};
 
+/* IA só existe dentro do Claude (não no app Android nem no site) */
+const NO_AI = !!window.FFNative || !(window.claude&&window.claude.use);
+
 /* ---------- dieta ---------- */
 const horaNum = h=>{const m=String(h||"").match(/(\d{1,2})\s*[h:]?\s*(\d{2})?/);if(!m)return 12;return Math.min(23,+m[1])+(m[2]?Math.min(59,+m[2])/60:0)};
 const fmtHora = n=>pad(Math.floor(n))+":"+pad(Math.round((n%1)*60)%60);
@@ -108,6 +111,11 @@ const treinoDo2 = wd=>{const t=P().treinos||DEFAULT_TREINOS;return t[wd]||""};
 function remindersHTML(){
   if(window.FFNative)return notifSettingsHTML();
   const tdays=[0,1,2,3,4,5,6].filter(i=>treinoDo2(i));
+  if(!window.claude||!window.claude.use)return `<div class="stack"><div class="tip">Coloque os horários da sua dieta como alarmes no calendário do celular. Ele avisa na hora, mesmo com o app fechado.</div>
+    <button class="btn cyan big full" data-act="ics">Adicionar alarmes ao Calendário</button>
+    <div class="tip"><b style="color:var(--ink)">iPhone:</b> toque no botão e depois em “Adicionar tudo”. <b style="color:var(--ink)">Android:</b> abra o arquivo baixado com o app de calendário, ou use os botões abaixo.</div>
+    ${DIETA().map(m=>`<a class="remind" href="${esc(gcalLink("Foco Fit: "+m.nome,m.hora,m.itens.join(" / ")))}" target="_blank" rel="noopener"><b>${m.hora}</b><span>${esc(m.nome)}</span><i>Google</i></a>`).join("")}
+    <div class="tip">Mudou os horários da dieta? Adicione de novo e apague os antigos no calendário.</div></div>`;
   return `<div class="stack"><div class="tip">Toque em cada um para criar um alarme diário no Google Agenda do celular. Ele avisa no horário mesmo com o app fechado.</div>
     ${DIETA().map(m=>`<a class="remind" href="${esc(gcalLink("Foco Fit: "+m.nome,m.hora,m.itens.join(" / ")))}" target="_blank" rel="noopener"><b>${m.hora}</b><span>${esc(m.nome)}</span><i>+ Agenda</i></a>`).join("")}
     ${tdays.length?`<a class="remind" href="${esc(gcalLink("Foco Fit: hora do treino",P().treinoHora||"18:00","Só ir já é 80% da vitória.","RRULE:FREQ=WEEKLY;BYDAY="+tdays.map(i=>BYDAY[i]).join(",")))}" target="_blank" rel="noopener"><b>${esc(P().treinoHora||"18:00")}</b><span>Treino (${tdays.map(i=>WD[i]).join(", ")})</span><i>+ Agenda</i></a>`:""}
@@ -593,7 +601,7 @@ function renderDoces(){
     <div class="card">${SWEETS_OK.map(s=>`<div class="sweet"><div><b>${esc(s[0])}</b><small>${esc(s[1])}</small></div><span class="kcal low">${s[2]}</span></div>`).join("")}</div>
     <div class="sec"><h2>Compare antes de pegar</h2><small>kcal</small></div>
     <div class="card">${SWEETS_BAD.map(s=>`<div class="sweet"><div><b>${esc(s[0])}</b>${s[1]?`<small>${esc(s[1])}</small>`:""}</div><span class="kcal high">${s[2]}</span></div>`).join("")}</div>
-    ${window.FFNative?"":`<div class="sec"><h2>Pergunte à IA</h2></div>
+    ${NO_AI?"":`<div class="sec"><h2>Pergunte à IA</h2></div>
     <div class="card stack"><label class="f" for="sw-q">O QUE VOCÊ TEM EM CASA?<input type="text" id="sw-q" placeholder="ex.: banana, leite, cacau, aveia"></label>
       <button class="btn pink full" data-act="ai-sweet">Me dê ideias de doce leve</button><div id="sw-out" hidden class="ai-box"></div></div>`}`;
 }
@@ -782,16 +790,16 @@ function dietSetupHTML(isOb){
   if(ds.busy)return `<div class="card stack" style="justify-items:center;text-align:center;padding:24px"><div class="runner running">${avatarSVG(draft||S.profile.avatar,2,false)}</div><h3 style="font-size:20px">${esc(ds.busy)}</h3><div class="tip">Isso pode levar até um minuto.</div></div>`;
   if(ds.result)return dietReviewHTML(isOb);
   const modes=[["texto","Digitar ou colar","Cole a dieta do nutricionista ou do ChatGPT"],["foto","Foto ou arquivo","Envie um print, foto ou .txt da dieta"],["gerar","Não tenho dieta","Monto uma pelos seus objetivos"]];
-  const ms=window.FFNative?modes.filter(m=>m[0]!=="foto").map(m=>m[0]==="gerar"?[m[0],m[1],"Uso um modelo pelo seu objetivo"]:m):modes;
+  const ms=NO_AI?modes.filter(m=>m[0]!=="foto").map(m=>m[0]==="gerar"?[m[0],m[1],"Uso um modelo pelo seu objetivo"]:m):modes;
   let h=`<div class="modes">${ms.map(([id,t,s])=>`<button data-dsmode="${id}" class="${ds.mode===id?"on":""}"><b>${t}</b><span>${s}</span></button>`).join("")}</div>`;
   if(ds.mode==="texto")h+=`<div class="card stack"><label class="f" for="ds-text">COLE OU DIGITE SUA DIETA<textarea id="ds-text" rows="9" placeholder="06h20 — Café da manhã&#10;- 1 pão francês&#10;- 2 ovos&#10;11h30 — Almoço&#10;- 3 colheres de arroz ...">${esc(ds.text||"")}</textarea></label>
     <button class="btn pink big full" data-act="ds-run">Ler minha dieta</button></div>`;
   if(ds.mode==="foto")h+=`<div class="card stack"><label class="f" for="ds-file">ESCOLHA A FOTO OU O ARQUIVO<input type="file" id="ds-file" accept="image/png,image/jpeg,image/webp,.txt,text/plain"></label>
     <div class="tip">Funciona com print ou foto nítida da dieta, e arquivos .txt. Para PDF, tire um print da tela.</div>
     <button class="btn pink big full" data-act="ds-run">Ler arquivo</button></div>`;
-  if(ds.mode==="gerar"){const o=ob||newOb();h+=`<div class="card stack"><div class="tip">${window.FFNative?"Vou usar um modelo de dieta simples e barata para":"Vou montar uma dieta simples e barata para"} <b style="color:var(--ink)">${esc((OBJETIVOS.find(x=>x[0]===o.objetivo)||[,""])[1].toLowerCase())}</b>, acordando às ${esc(o.acordar)} e treinando às ${esc(o.treinoHora)}.</div>
+  if(ds.mode==="gerar"){const o=ob||newOb();h+=`<div class="card stack"><div class="tip">${NO_AI?"Vou usar um modelo de dieta simples e barata para":"Vou montar uma dieta simples e barata para"} <b style="color:var(--ink)">${esc((OBJETIVOS.find(x=>x[0]===o.objetivo)||[,""])[1].toLowerCase())}</b>, acordando às ${esc(o.acordar)} e treinando às ${esc(o.treinoHora)}.</div>
     <label class="f" for="ds-restr">ALGO QUE VOCÊ NÃO COME OU NÃO GOSTA?<input type="text" id="ds-restr" placeholder="ex.: não consigo comer ovo de manhã" value="${esc(o.restr||"")}"></label>
-    ${window.FFNative?`<button class="btn pink big full" data-act="ds-template">Montar minha dieta</button>`:`<button class="btn pink big full" data-act="ds-run">Montar minha dieta</button>
+    ${NO_AI?`<button class="btn pink big full" data-act="ds-template">Montar minha dieta</button>`:`<button class="btn pink big full" data-act="ds-run">Montar minha dieta</button>
     <button class="btn ghost full" data-act="ds-template">Prefiro um modelo pronto, sem IA</button>`}
     <div class="tip">É uma sugestão para começar e não substitui um nutricionista.</div></div>`}
   if(ds.err)h+=`<div class="verdict no" style="margin-top:10px"><p>${esc(ds.err)}</p></div>`;
@@ -894,7 +902,7 @@ function doCheck(mealId,dayK){
   let h=r?`<div class="verdict ${VERD[r.v].cls}"><b>${VERD[r.v].t}</b>${r.notes.map(n=>`<p>${esc(n)}</p>`).join("")}
       ${r.v!=="ok"?`<p style="margin-top:4px"><b style="font-size:16px;color:var(--ink)">Melhor opção agora:</b></p><ul>${(ALTS[(DIETA().find(x=>x.id===mealId)||{}).tipo]||ALTS.lanche).map(a=>`<li>${esc(a)}</li>`).join("")}</ul>`:""}</div>`
     :`<div class="verdict unk"><b>Não conheço esse alimento</b><p>Peça a análise da IA abaixo, ou registre do seu jeito.</p></div>`;
-  h+=`<div id="ck-ai"></div><div class="row-end">${window.FFNative?"":`<button class="btn sm" data-act="ai-check">Análise com IA</button>`}${dayK?`<button class="btn green sm" data-act="save-troca">Registrar troca</button>`:""}</div>`;
+  h+=`<div id="ck-ai"></div><div class="row-end">${NO_AI?"":`<button class="btn sm" data-act="ai-check">Análise com IA</button>`}${dayK?`<button class="btn green sm" data-act="save-troca">Registrar troca</button>`:""}</div>`;
   $("#ck-out").innerHTML=h; ding(r&&r.v==="no"?"low":"small");
 }
 async function getSample(){try{if(!window.claude||!window.claude.use)return null;return await window.claude.use("sample")}catch(e){return null}}
@@ -1030,6 +1038,11 @@ document.addEventListener("click",e=>{
 });
 async function downloadICS(){
   const txt=buildICS({treino:true,agua:true});
+  if(!window.claude||!window.claude.use){
+    const url=URL.createObjectURL(new Blob([txt],{type:"text/calendar"})),a=document.createElement("a");
+    a.href=url;a.download="lembretes-foco-fit.ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    toast("Abra o arquivo para adicionar ao calendário");return;
+  }
   try{const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
     if(!dl){toast("Não deu para baixar aqui. Use os botões do Google Agenda.");return}
     await dl.save({filename:"lembretes-foco-fit.ics",data:txt});toast("Arquivo salvo. Abra para adicionar ao calendário.");
