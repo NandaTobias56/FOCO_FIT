@@ -1,4 +1,6 @@
-// Ponte para os plugins nativos (notificações). Vira www/native.js no build.
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-window.FFNative = Capacitor.isNativePlatform() ? { LocalNotifications, platform: Capacitor.getPlatform() } : null;
+import { App } from "@capacitor/app";
+import qrcode from "qrcode-generator";
+window.FFQR = qrcode;
+window.FFNative = Capacitor.isNativePlatform() ? { LocalNotifications, App, platform: Capacitor.getPlatform() } : null;

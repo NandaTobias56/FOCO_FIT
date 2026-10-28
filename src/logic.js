@@ -145,7 +145,7 @@ async function connectDb(){
     col=c;
     if(snap.empty){if(S.profile){queue("profile",{v:2,profile:S.profile});Object.keys(S.days).forEach(k=>queue("d"+k,{date:k,day:S.days[k]}))}return}
     const next={profile:null,days:{}};
-    snap.forEach(doc=>{const d=doc.data()||{};if(doc.id==="profile")next.profile=d.profile||null;else if(d.date)next.days[d.date]=d.day||{}});
+    snap.forEach(doc=>{const d=doc.data()||{};if(doc.id==="pro"){if(d.pro&&!PRO){PRO=d.pro;try{localStorage.setItem(LSP,JSON.stringify(PRO))}catch(e){}}}else if(doc.id==="profile")next.profile=d.profile||null;else if(d.date)next.days[d.date]=d.day||{}});
     if(next.profile){S=next;lsSave();lastLevel=null;render()}
   }catch(e){console.warn("db",e)}
 }
@@ -434,6 +434,8 @@ function speech(A,i,tired){
   return ["Cada check me deixa mais forte!","Uma missão de cada vez.","Você não precisa de motivação, só do próximo passo."][i.done%3];
 }
 function render(){
+  if(MODE==="pro"){renderPro();return}
+  if(!S.profile&&!MODE&&!obStep){renderRole();return}
   $("#tabbar").hidden=!S.profile||!!obStep;
   if(!S.profile||obStep){renderOnboarding();return}
   const A=computeAll(), lv=levelOf(A.xp), st=stageOf(lv.L), tired=isTired();
@@ -449,6 +451,7 @@ function render(){
     <div class="flame ${A.streak?"":"off"}" title="Dias seguidos">${FLAME}<b>${A.streak}</b></div>
   </header>`;
   if(view.tab==="hoje")h+=renderHoje(A,lv,st,tired);
+  else if(view.tab==="treino")h+=renderTreino();
   else if(view.tab==="trocas")h+=renderTrocas();
   else if(view.tab==="doces")h+=renderDoces();
   else h+=renderEvolucao(A,lv,st,tired);
@@ -459,7 +462,7 @@ function render(){
   else if(justCompleted&&view.day===todayKey()){setTimeout(()=>{confetti(160);ding("big");toast("DIA CUMPRIDO! Seu baú foi liberado")},250)}
 }
 function renderTabs(){
-  const t=[["hoje","Hoje"],["trocas","Trocas"],["doces","Doces"],["evolucao","Evolução"]];
+  const t=[["hoje","Hoje"],["treino","Treino"],["trocas","Trocas"],["doces","Doces"],["evolucao","Evolução"]];
   $("#tabs").innerHTML=t.map(([id,l])=>`<button role="tab" aria-selected="${view.tab===id}" data-tab="${id}">${IC[id]}<span>${l}</span></button>`).join("");
 }
 function sceneHTML(A,lv,st,tired,i,bubble){
@@ -483,7 +486,7 @@ function nowCard(i,k){
       <div class="acts"><button class="btn white" data-meal="${cur.id}" data-s="ok">Segui ✓</button><button class="btn glass" data-meal="${cur.id}" data-s="troca">Troquei</button></div></div>`;
   if(tr&&!d.treino&&hr>=17)
     return `<div class="now"><span class="k"><i></i>Hora do treino</span><h3>Treino de ${esc(tr)}</h3><p>Só ir já é 80% da vitória. Coloque a roupa e saia.</p>
-      <div class="acts"><button class="btn white" data-act="treino">Treinei ✓</button></div></div>`;
+      <div class="acts"><button class="btn white" data-x="w-start" data-wd="${new Date().getDay()}">Começar treino ▶</button><button class="btn glass" data-act="treino">Já treinei ✓</button></div></div>`;
   if(late.length)
     return `<div class="now"><span class="k"><i></i>Ficou pra trás</span><h3>${late[0].nome}</h3><p>Já comeu? Marque agora para não perder o XP.</p>
       <div class="acts"><button class="btn white" data-meal="${late[0].id}" data-s="ok">Segui ✓</button><button class="btn glass" data-meal="${late[0].id}" data-s="troca">Troquei</button><button class="btn glass" data-meal="${late[0].id}" data-s="pulei">Pulei</button></div></div>`;
@@ -530,7 +533,7 @@ function renderHoje(A,lv,st,tired){
   const wcMeta=p.cardioSemana||3;
   h+=`<div class="sec"><h2>Treino</h2><small>${i.complete?"Dia cumprido ✓":"Feche: "+i.need+" refeições"+(tr?" + treino":"")}</small></div><div class="card">
     <div class="q ${d.treino?"done":""}"><button class="chk" data-act="treino" aria-label="Marcar treino">${CHECK}</button>
-      <div class="t"><b>${tr?"Treino de "+esc(tr):"Dia de descanso"}</b><p>${tr?"Musculação":"Treinou mesmo assim? Marque!"}</p></div><div class="side"><span class="xp">+${tr?30:15}</span></div></div>
+      <div class="t"><b>${tr?"Treino de "+esc(tr):"Dia de descanso"}</b><p>${tr?(d.tlog?`${d.tlog.ex.length} exercícios · ${d.tlog.dur} min`:`${(planDay(dateOf(k).getDay())||{ex:[]}).ex.length} exercícios com vídeo`):"Treinou mesmo assim? Marque!"}</p></div><div class="side">${tr&&!d.treino&&k===todayKey()?`<button class="btn pink sm" data-x="w-start" data-wd="${dateOf(k).getDay()}">${W&&W.k===k?"Continuar":"Treinar"} ▶</button>`:`<span class="xp">+${tr?30:15}</span>`}</div></div>
     <div class="q ${cd?"done":""}"><div class="ic run">${IC.run}</div>
       <div class="t"><b>Cardio${cd?` · ${cd} min`:""}</b><p>Meta ${cardioMeta()} min · semana ${wc}/${wcMeta}</p></div>
       <div class="side">${cd?`<span class="xp">+${cd>=cardioMeta()?20:10}</span><button class="mini" data-act="cardio-undo">desfazer</button>`:`<button class="btn cyan sm" data-timer="${cardioMeta()}">Iniciar</button><button class="mini" data-act="cardio-manual">já fiz</button>`}</div></div>
@@ -640,6 +643,7 @@ function renderEvolucao(A,lv,st,tired){
     <button class="btn full" data-act="reminders">${window.FFNative?"Notificações":"Lembretes no celular"}</button>
     <button class="btn full" data-act="edit-avatar">Trocar personagem</button>
     <button class="btn full" data-act="edit-plan">Treinos e metas</button>
+    <button class="btn full" data-x="to-pro">Área do professor</button>
     <button class="btn full" data-act="backup">Backup dos dados</button>
     ${window.FFNative?`<button class="btn full" data-act="check-update">Procurar atualização</button>`:""}
     <button class="btn full" data-act="som">Som: ${p.som===false?"desligado":"ligado"}</button>
@@ -742,10 +746,11 @@ function renderOnboarding(){
   let h=stepDots();
   if(obStep===1){
     h+=`<div class="stack"><h1 style="font-size:32px">Bem-vinda ao <span style="color:var(--pink)">Foco Fit</span></h1>
+      ${pendingPlan?`<div class="pnote">Seu plano do prof. ${esc((pendingPlan.pf||[])[0]||"")} já está guardado. Escolha seu personagem e ele entra pronto.</div>`:""}
       <p style="margin:0;color:var(--muted)">Cada refeição, treino, cardio e copo d’água vira XP. Seu personagem sobe de nível, evolui em 5 fases e ganha itens nos baús.</p>
       <div class="scene ob-scene bg-noite"><div class="av" id="ob-av">${avatarSVG(draft,2,false)}</div></div>
       ${avatarForm()}
-      <button class="btn pink big full" data-act="ob-next">Continuar</button></div>`;
+      <button class="btn pink big full" data-act="ob-next">Continuar</button>${pendingPlan?"":`<button class="btn ghost full" data-x="role-back">Voltar</button>`}</div>`;
   } else if(obStep===2){
     const dias=[1,2,3,4,5,6,0];
     h+=`<div class="stack"><h1 style="font-size:28px">Seus objetivos</h1><p style="margin:0;color:var(--muted)">Isso ajuda a montar sua dieta e seus lembretes.</p>
@@ -993,7 +998,9 @@ document.addEventListener("click",e=>{
     case "ai-sweet":aiSweet();break;
     case "add-w":{const v=num($("#w-kg").value);if(!v||v<30||v>300){toast("Digite o peso em kg, ex.: 72,5");break}
       const p=S.profile;p.pesos=(p.pesos||[]).filter(w=>w.d!==todayKey());p.pesos.push({d:todayKey(),kg:v});if(!num(p.pesoInicial))p.pesoInicial=v;saveProfile();render();toast("Peso salvo");break}
-    case "ob-next":obCollect();if(obStep===1&&!draft.nome.trim()){draft.nome="Você"}obStep++;render();window.scrollTo(0,0);break;
+    case "ob-next":obCollect();if(obStep===1&&!draft.nome.trim()){draft.nome="Você"}
+      if(obStep===1&&pendingPlan){profileFromPlan(pendingPlan);pendingPlan=null;incoming=null;obStep=4;try{history.replaceState(null,"",location.pathname)}catch(e){}render();window.scrollTo(0,0);ding("big");break}
+      obStep++;render();window.scrollTo(0,0);break;
     case "ob-back":obCollect();obStep=Math.max(1,obStep-1);ds.busy=null;render();window.scrollTo(0,0);break;
     case "ob-finish":if(window.FFNative&&notifPerm!=="granted")askNotif();obStep=0;view.tab="hoje";render();window.scrollTo(0,0);confetti(150);ding("big");break;
     case "ds-run":dsRun();break;
@@ -1011,8 +1018,8 @@ document.addEventListener("click",e=>{
       <button class="btn pink full" data-act="bk-copy">Copiar meu backup</button>
       <label class="f" for="bk-in">RESTAURAR: COLE O BACKUP AQUI<textarea id="bk-in" rows="4"></textarea></label>
       <button class="btn full" data-act="bk-restore">Restaurar backup</button><button class="btn ghost full" data-close="1">Fechar</button>`);break;
-    case "bk-copy":{const txt=JSON.stringify(S);navigator.clipboard.writeText(txt).then(()=>toast("Backup copiado"),()=>{const t=$("#bk-in");t.value=txt;t.select();toast("Selecione e copie o texto")});break}
-    case "bk-restore":{try{const o=JSON.parse($("#bk-in").value);if(!o||!o.profile||typeof o.days!=="object")throw 0;S={profile:o.profile,days:o.days};saveProfile();Object.keys(S.days).forEach(x=>saveDay(x));closeSheet();lastLevel=null;render();toast("Backup restaurado")}catch(e){toast("Esse texto não é um backup do Foco Fit")}break}
+    case "bk-copy":{const txt=JSON.stringify(PRO?{...S,pro:PRO}:S);navigator.clipboard.writeText(txt).then(()=>toast("Backup copiado"),()=>{const t=$("#bk-in");t.value=txt;t.select();toast("Selecione e copie o texto")});break}
+    case "bk-restore":{try{const o=JSON.parse($("#bk-in").value);if(!o||!o.profile||typeof o.days!=="object")throw 0;S={profile:o.profile,days:o.days};if(o.pro){PRO=o.pro;proSave()}saveProfile();Object.keys(S.days).forEach(x=>saveDay(x));closeSheet();lastLevel=null;render();toast("Backup restaurado")}catch(e){toast("Esse texto não é um backup do Foco Fit")}break}
     case "notif-ask":askNotif().then(refreshNotifSheet);break;
     case "notif-exact":try{LN.changeExactNotificationSetting().then(r=>{exactOk=r&&r.exact_alarm;refreshNotifSheet()})}catch(e){}break;
     case "notif-test":if(LN){(async()=>{if(notifPerm!=="granted"&&!(await askNotif())){toast("Libere as notificações nos ajustes do celular");return}
@@ -1142,6 +1149,7 @@ function onNotifTap(actionId,extra){
   if(extra.kind==="update"){render();showUpdateSheet();return}
   if(extra.kind==="agua"&&actionId==="ok"){const d=day(t);d.agua=Math.min(20,(d.agua||0)+1);saveDay(t);reward(before,t);render();toast("+1 copo d’água");return}
   if(extra.kind==="treino"&&actionId==="ok"){const d=day(t);d.treino=true;saveDay(t);reward(before,t);render();return}
+  if(extra.kind==="treino")view.tab="treino";
   render();
 }
 function notifSettingsHTML(){
@@ -1195,8 +1203,3 @@ async function checkUpdate(force){
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate()});
 const refreshNotifSheet=()=>{const sh=$(".sheet");if(sh)sh.innerHTML=`<h2>Notificações</h2>${notifSettingsHTML()}<button class="btn ghost full" data-close="1">Fechar</button>`;else render()};
 
-lsLoad(); render();
-if(LN)notifSetup().then(()=>{queueNotifSync(200);checkUpdate()});
-try{const t=JSON.parse(localStorage.getItem("focofit.timer")||"null");if(t&&t.kind==="cardio"&&S.profile)startCardio(t.mins,t)}catch(e){}
-connectDb();
-})();
