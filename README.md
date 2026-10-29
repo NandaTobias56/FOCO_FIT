@@ -19,3 +19,14 @@ Na primeira tela (ou em Evolução > Área do professor), o personal cadastra os
 - `src/` tem a página do app: `head.html` (estilos), `consts.js`, `exercises.js` (biblioteca de exercícios e vídeos), `logic.js` (dieta, jogo e telas do aluno), `treino.js` (treino guiado, editor, links de plano e relatório), `pro.js` (modo professor) e `boot.js` (início). `native-entry.js` é a ponte para as notificações, links `focofit://` e o QR code.
 - `npm run build` junta tudo em `www/index.html`; `npm run sync` copia para o projeto Android (Capacitor).
 - A cada push na `main`, o GitHub Actions compila o APK e publica em Releases.
+
+## Contas e servidor (fase 1, Supabase)
+
+Sem `src/config.json` preenchido, o app funciona como antes (tudo só no celular). Com ele preenchido, aparecem login, papéis e vínculo.
+
+1. Criar o projeto no Supabase (região São Paulo) e rodar as migrações de `supabase/migrations/` em ordem.
+2. Em Authentication > Email Templates, colocar `{{ .Token }}` no modelo "Magic Link" (o app usa código de 6 dígitos, não link).
+3. Preencher `src/config.json` com a URL e a chave **anon** (pública). Nunca a service_role.
+4. Tornar alguém administrador direto no SQL: `update profiles set papel='admin' where id='<uuid>';`
+
+Regras do banco: `npm run test:db`. Telas: `tests/ui/conta.test.cjs` (servidor falso).

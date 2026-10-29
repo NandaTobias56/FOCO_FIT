@@ -116,6 +116,29 @@ check((await rows(N, "select * from planos_dieta")).length === 0, "profissional 
 await fails(N, "update profissionais set registro='CRN-3 99999' where id=$1", "bloqueado não reabre o próprio cadastro", [N]);
 check((await rows(B, "select * from profiles where id=$1", [A])).length === 0, "aluno não vê perfil de outro aluno");
 
+// documentos do registro (Storage)
+await as(Q, "insert into storage.objects(bucket_id, name) values ('documentos', $1)", [Q + "/cref.jpg"]);
+await fails(Q, "insert into storage.objects(bucket_id, name) values ('documentos', $1)", "ninguém envia arquivo na pasta de outro", [P + "/cref.jpg"]);
+check((await rows(P, "select * from storage.objects")).length === 0, "profissional não vê documento de outro");
+check((await rows(X, "select * from storage.objects")).length === 1, "admin vê o documento para conferir");
+await as(Q, "update profissionais set documento_path=$2 where id=$1", [Q, Q + "/cref.jpg"]);
+await fails(Q, "update profissionais set documento_path=$2 where id=$1", "cadastro não aponta para documento de outro", [Q, P + "/cref.jpg"]);
+
+// excluir conta: some tudo do aluno; o que o nutri escreveu fica com o aluno
+await as(X, "select revisar_profissional($1,'aprovado')", [Q]);
+const codB = (await db.query("select codigo_vinculo c from profiles where id=$1", [B])).rows[0].c;
+await as(Q, "select solicitar_vinculo($1)", [codB]);
+await as(B, "select responder_vinculo((select id from vinculos where aluno_id=$1), true)", [B]);
+await as(B, "insert into registros_dia(aluno_id, dia) values ($1, '2026-10-29')", [B]);
+await as(N, "select excluir_minha_conta()");
+check((await db.query("select count(*)::int n from profiles where id=$1", [N])).rows[0].n === 0, "profissional exclui a própria conta");
+check((await db.query("select count(*)::int n from restricoes where item='lactose'")).rows[0].n === 1, "alergia anotada pelo nutri fica com o aluno");
+await as(B, "select excluir_minha_conta()");
+check((await db.query("select count(*)::int n from registros_dia where aluno_id=$1", [B])).rows[0].n === 0, "dados do aluno somem ao excluir a conta");
+check((await db.query("select count(*)::int n from vinculos where aluno_id=$1", [B])).rows[0].n === 0, "vínculos somem ao excluir a conta");
+await as(Q, "select excluir_minha_conta()");
+check((await db.query("select count(*)::int n from storage.objects where name like $1", [Q + "/%"])).rows[0].n === 0, "documento some ao excluir a conta");
+
 // anônimo
 await db.exec("set role anon");
 let anonOk = true; try { await db.query("select * from profiles"); anonOk = false } catch (e) {}
