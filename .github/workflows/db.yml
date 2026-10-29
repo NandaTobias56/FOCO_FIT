@@ -1,0 +1,15 @@
+name: Testar regras do banco
+on:
+  push:
+    paths: ["supabase/**", "package.json", ".github/workflows/db.yml"]
+  pull_request:
+    paths: ["supabase/**"]
+jobs:
+  rls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npm run test:db
