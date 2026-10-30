@@ -22,8 +22,9 @@ function renderRole(){
     <h1 style="font-size:34px;margin-top:10px">Foco <span style="color:var(--pink)">Fit</span></h1>
     <p style="margin:0;color:var(--muted)">Dieta, treino e cardio viram um jogo. Como você vai usar?</p>
     <button class="rolebtn" data-x="role-aluno"><span class="ri">${IC.gym}</span><span><b>Quero seguir meu plano</b><small>Treino guiado com vídeo, dieta, água e um personagem que evolui com você</small></span></button>
-    <button class="rolebtn pro" data-x="role-pro"><span class="ri">${PIC.alunos}</span><span><b>Sou professor(a) ou personal</b><small>Monte treino e dieta dos seus alunos, mande pelo WhatsApp e acompanhe a semana de cada um</small></span></button>
-    <button class="btn ghost" data-x="code-open">Recebi um link do meu professor</button></div>`;
+    <button class="rolebtn pro" data-x="role-pro"><span class="ri">${PIC.alunos}</span><span><b>Sou personal ou nutricionista</b><small>${CLOUD?"Com CREF ou CRN conferido: vincule seus alunos e acompanhe a semana de cada um":"Monte treino e dieta dos seus alunos, mande pelo WhatsApp e acompanhe a semana de cada um"}</small></span></button>
+    <button class="btn ghost" data-x="code-open">Recebi um link do meu professor</button>
+    ${CLOUD?`<button class="btn ghost" data-x="ct-open">${ME?"Minha conta":"Já tenho conta: entrar"}</button>`:""}</div>`;
 }
 
 /* status do aluno: semáforo */

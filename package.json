@@ -5,17 +5,20 @@
   "description": "Foco Fit: dieta, treino e cardio com personagem que evolui",
   "scripts": {
     "build": "node scripts/build-www.mjs",
-    "sync": "npm run build && npx cap sync android"
+    "sync": "npm run build && npx cap sync android",
+    "test:db": "node supabase/tests/rls.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.0",
     "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.4.0",
     "@capacitor/local-notifications": "^7.0.0",
+    "@supabase/supabase-js": "^2.118.0",
     "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.0",
+    "@electric-sql/pglite": "^0.2.17",
     "esbuild": "^0.25.9"
   }
 }

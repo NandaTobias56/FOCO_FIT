@@ -133,7 +133,7 @@ let col=null; const pending=new Map(); let flushT=null;
 function queue(id,data){if(!col)return;pending.set(id,data);clearTimeout(flushT);flushT=setTimeout(flush,700)}
 async function flush(){const items=[...pending.entries()];pending.clear();for(const [id,data] of items){try{await col.doc(id).set(data)}catch(e){console.warn("save",id,e)}}}
 function saveProfile(){lsSave();queue("profile",{v:2,profile:S.profile});if(window.FFNative)queueNotifSync()}
-function saveDay(k){lsSave();queue("d"+k,{date:k,day:S.days[k]||{}});if(window.FFNative)queueNotifSync(4000)}
+function saveDay(k){lsSave();cloudDay(k);queue("d"+k,{date:k,day:S.days[k]||{}});if(window.FFNative)queueNotifSync(4000)}
 async function connectDb(){
   try{
     if(!window.claude||!window.claude.use)return;
@@ -434,6 +434,7 @@ function speech(A,i,tired){
   return ["Cada check me deixa mais forte!","Uma missão de cada vez.","Você não precisa de motivação, só do próximo passo."][i.done%3];
 }
 function render(){
+  if(CT.open){renderConta();return}
   if(MODE==="pro"){renderPro();return}
   if(!S.profile&&!MODE&&!obStep){renderRole();return}
   $("#tabbar").hidden=!S.profile||!!obStep;
@@ -643,6 +644,7 @@ function renderEvolucao(A,lv,st,tired){
     <button class="btn full" data-act="reminders">${window.FFNative?"Notificações":"Lembretes no celular"}</button>
     <button class="btn full" data-act="edit-avatar">Trocar personagem</button>
     <button class="btn full" data-act="edit-plan">Treinos e metas</button>
+    ${CLOUD?`<button class="btn full" data-x="ct-open">${ME?"Minha conta":"Entrar ou criar conta"}</button>`:""}
     <button class="btn full" data-x="to-pro">Área do professor</button>
     <button class="btn full" data-act="backup">Backup dos dados</button>
     ${window.FFNative?`<button class="btn full" data-act="check-update">Procurar atualização</button>`:""}
@@ -890,6 +892,8 @@ function dsConfirm(){
 function checkFood(txt){
   let used=" "+norm(txt).replace(/[^a-z0-9 -]/g," ")+" "; const hits=[];
   FOODS.forEach(([keys,v,note])=>{for(const kw of keys.split("|")){const re=new RegExp("(^|[^a-z])"+kw.replace(/[-]/g,"\\-")+"s?(?=[^a-z]|$)");if(re.test(used)){hits.push({v,note});used=used.replace(re," ");break}}});
+  const al=alergiaEm(txt);
+  if(al.length)return {v:"no",notes:al.map(r=>r.t==="preferencia"?`Você marcou que não come ${r.i}.`:`Atenção: você marcou ${r.t==="alergia"?"alergia":"intolerância"} a ${r.i}${r.g?" ("+r.g+")":""}. Evite este alimento.`)};
   if(!hits.length)return null;
   const worst=hits.reduce((a,h)=>RANK[h.v]>RANK[a]?h.v:a,"ok");
   return {v:worst,notes:[...new Set(hits.filter(h=>h.v===worst||worst==="ok").map(h=>h.note))]};
