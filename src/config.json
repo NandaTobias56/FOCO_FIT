@@ -1,5 +1,5 @@
 {
   "_leia": "Endereço e chave PÚBLICA (anon) do projeto Supabase. A chave anon pode ficar no app: quem protege os dados são as regras do banco. Nunca coloque aqui a service_role.",
   "supabaseUrl": "https://sjvqcitjlmyqpnjtspwu.supabase.co",
-  "supabaseAnonKey": ""
+  "supabaseAnonKey": "sb_publishable_1ti_oFUJKzaWgSiJemmZMQ_vm7d3L5o"
 }
