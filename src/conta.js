@@ -50,6 +50,11 @@ const regTxt=p=>p?(p.conselho==="CREF"?"CREF "+p.registro:p.registro):"";
 const idade=n=>{if(!n)return "";const d=new Date(n),h=new Date();let a=h.getFullYear()-d.getFullYear();if(h<new Date(h.getFullYear(),d.getMonth(),d.getDate()))a--;return a+" anos"};
 const quando=ts=>{const d=new Date(ts);return d.getDate()+" "+MES[d.getMonth()]+" "+pad(d.getHours())+":"+pad(d.getMinutes())};
 function setME(m){ME=m;lsSet(LSME,m)}
+/* com a nuvem ligada, o app só abre depois do login e do aceite dos termos */
+const precisaLogin=()=>CLOUD&&!(ME&&ME.perfil&&ME.perfil.aceite_termos_em);
+/* depois de entrar: aluno segue para o app; profissional ainda sem aprovação e admin vão para a conta */
+function aposEntrar(){if(MODE)return;const p=papelDe();
+  if(p==="aluno")setMode("aluno");else if(proLiberado())setMode("pro");else CT.open=true}
 
 function errMsg(e){
   const m=String(e&&(e.message||e.error_description||e.msg)||e||""), c=e&&e.code;
@@ -104,7 +109,7 @@ function renderConta(){
   $("#app").innerHTML=`<div class="stack ct">${h}</div>`;
 }
 function loginHTML(){
-  const voltar=`<button class="btn ghost full" data-x="${CT.step?"ct-step":"ct-close"}" data-s="">Voltar</button>`;
+  const voltar=!CT.step&&!CT.open?"":`<button class="btn ghost full" data-x="${CT.step?"ct-step":"ct-close"}" data-s="">Voltar</button>`;
   if(CT.step==="codigo")return `<h1 class="ct-t">Digite o <span>código</span></h1>
     <p class="tip">Mandamos um código para <b>${esc(CT.email)}</b>. Olhe também a caixa de spam.</p>
     <input type="text" id="ct-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="000000" class="ct-otp" aria-label="Código do e-mail">
@@ -283,16 +288,16 @@ document.addEventListener("click",e=>{
     case "ct-verify":run(async()=>{const c=($("#ct-otp").value||"").replace(/\D/g,"");if(c.length<6){toast("O código tem 6 números ou mais");return}
       await API.verify(CT.email,c);await refreshME();
       if(ME&&CT.aceite&&!ME.perfil.aceite_termos_em){await API.salvarPerfil(ME.uid,{aceite_termos_em:new Date().toISOString()});ME.perfil.aceite_termos_em=new Date().toISOString();setME(ME)}
-      CT.step="";CT.aceite=false;render();window.scrollTo(0,0);confetti(80);ding("small");loadHub();
+      CT.step="";CT.aceite=false;if(ME&&ME.perfil.aceite_termos_em)aposEntrar();render();window.scrollTo(0,0);confetti(80);ding("small");loadHub();
       if(papelDe()==="aluno")setTimeout(()=>{if(Object.keys(S.days).length&&!(lsGet(LSSY,{}).ts))syncTudo(true)},1500)});break;
-    case "ct-aceite":run(async()=>{if(!aceitou()){toast("Marque as duas caixinhas para continuar");return}const t=new Date().toISOString();await API.salvarPerfil(ME.uid,{aceite_termos_em:t});ME.perfil.aceite_termos_em=t;setME(ME);render();loadHub()});break;
+    case "ct-aceite":run(async()=>{if(!aceitou()){toast("Marque as duas caixinhas para continuar");return}const t=new Date().toISOString();await API.salvarPerfil(ME.uid,{aceite_termos_em:t});ME.perfil.aceite_termos_em=t;setME(ME);aposEntrar();render();loadHub()});break;
     case "ct-reload":CT.data=null;render();loadHub();break;
-    case "ct-sair":run(async()=>{try{await API.sair()}catch(err){}setME(null);lsSet(LSRS,null);CT.data=null;CT.step="";CT.reg=null;CT.doc=null;if(MODE==="pro")setMode("");render();toast("Você saiu da conta")});break;
+    case "ct-sair":run(async()=>{try{await API.sair()}catch(err){}setME(null);lsSet(LSRS,null);CT.data=null;CT.step="";CT.reg=null;CT.doc=null;setMode("");render();toast("Você saiu da conta")});break;
     case "ct-excluir":openSheet(`<h2>Excluir sua conta?</h2><div class="sub">Apaga para sempre sua conta e tudo o que está na nuvem${papelDe()==="aluno"?" (registros, alergias, planos e avaliações)":""}, e desfaz todos os vínculos. O que está guardado neste celular continua aqui.</div>
       <label class="f" for="ex-conf">PARA CONFIRMAR, ESCREVA EXCLUIR<input type="text" id="ex-conf" autocapitalize="characters"></label>
       <div class="row-end"><button class="btn ghost" data-close="1">Cancelar</button><button class="btn" style="background:var(--red);border-color:var(--red)" data-x="ct-excluir-sim">Excluir para sempre</button></div>`);break;
     case "ct-excluir-sim":run(async()=>{if(($("#ex-conf").value||"").trim().toUpperCase()!=="EXCLUIR"){toast("Escreva EXCLUIR para confirmar");return}
-      await API.excluir(ME.uid);setME(null);lsSet(LSRS,null);lsSet(LSSY,null);if(MODE==="pro")setMode("");closeSheet();CT.data=null;CT.step="";render();toast("Conta excluída")});break;
+      await API.excluir(ME.uid);setME(null);lsSet(LSRS,null);lsSet(LSSY,null);setMode("");closeSheet();CT.data=null;CT.step="";render();toast("Conta excluída")});break;
     /* aluno */
     case "ct-cod-copy":copyText(ME.perfil.codigo_vinculo,"Código copiado");break;
     case "ct-cod-wa":openExt("https://wa.me/?text="+encodeURIComponent(`Meu código no Foco Fit é ${ME.perfil.codigo_vinculo}. No app, entre na sua conta de profissional e use em "Vincular aluno".`));break;

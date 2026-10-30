@@ -10,17 +10,19 @@ const shot=n=>pg.screenshot({path:OUT+n+'.png',fullPage:true});
 const toast=async()=>{await pg.waitForTimeout(400);return pg.evaluate(()=>{const t=document.querySelector('#toast');return t?t.textContent:''})};
 const click=async s=>{await pg.click(s);await pg.waitForTimeout(350)};
 const x=(a,extra='')=>`[data-x="${a}"]${extra}`;
-const login=async(email)=>{await click(x('ct-step','[data-s=entrar]'));await pg.fill('#ct-email',email);await click(x('ct-send'));await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(600)};
-const signup=async(papel,nome,email)=>{await click(x('ct-step','[data-s=criar]'));await click(x('ct-papel',`[data-p=${papel}]`));await pg.fill('#ct-nome',nome);await pg.fill('#ct-email',email);await pg.check('#ct-ok1');await pg.check('#ct-ok2');await click(x('ct-send'));await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(600)};
-const sair=async()=>{await click(x('ct-sair'));await pg.waitForTimeout(300)};
+const login=async(email)=>{await click(x('ct-step','[data-s=entrar]'));await pg.fill('#ct-email',email);await click(x('ct-send'));await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(600);await abrirConta()};
+const signup=async(papel,nome,email)=>{await click(x('ct-step','[data-s=criar]'));await click(x('ct-papel',`[data-p=${papel}]`));await pg.fill('#ct-nome',nome);await pg.fill('#ct-email',email);await pg.check('#ct-ok1');await pg.check('#ct-ok2');await click(x('ct-send'));await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(600);await abrirConta()};
+// depois do login o app segue para o aluno ou para a área PRO; daqui abre a conta
+const abrirConta=async()=>{if(await pg.isVisible(x('role-back')))await click(x('role-back'));else if(await pg.isVisible(x('ptab','[data-t=perfil]')))await click(x('ptab','[data-t=perfil]'));if(await pg.isVisible(x('ct-open')))await click(x('ct-open'));await pg.waitForTimeout(600)};
+const sair=async()=>{await click(x('ct-sair'));await pg.waitForTimeout(300);ok(await pg.isVisible(x('ct-step','[data-s=entrar]')),'ao sair volta para o login')};
 const R=[];const ok=(c,m)=>{R.push((c?'ok   ':'FALHA ')+m)};
 // 1 tela inicial
-ok(await pg.isVisible(x('ct-open')),'tela inicial mostra Entrar');
+ok(await pg.isVisible(x('ct-step','[data-s=criar]'))&&await pg.isVisible(x('ct-step','[data-s=entrar]')),'app abre no login');
+ok(!(await pg.isVisible(x('ct-close')))&&!(await pg.isVisible(x('role-aluno'))),'não dá para pular o login');
 await shot('0-inicio');
-// 2 personal tenta entrar na área: vai para criar conta
-await click(x('role-pro'));
-ok(await pg.isVisible('#ct-nome'),'área do professor pede conta');
-ok(await pg.getAttribute(x('ct-papel','[data-p=personal]'),'aria-pressed')==='true','personal já vem marcado');
+// 2 personal cria conta
+await click(x('ct-step','[data-s=criar]'));await click(x('ct-papel','[data-p=personal]'));
+ok(await pg.isVisible('#ct-nome'),'tela de criar conta');
 await shot('1-criar-conta');
 await pg.fill('#ct-nome','Paulo Ramos');await pg.fill('#ct-email','paulo@teste.com');
 await click(x('ct-send'));ok(/caixinhas/.test(await toast()),'sem aceite não envia');
@@ -45,7 +47,7 @@ await sair();
 // 3 admin
 await signup('aluno','Equipe Foco','adm@teste.com');
 await pg.evaluate(()=>{const s=FF_STUB_DB.sess.uid;FF_STUB_DB.profiles[s].papel='admin';FF_STUB_DB.profiles[s].codigo_vinculo=null;FF_STUB_SAVE()});
-await click(x('ct-close'));await click(x('ct-open'));await pg.waitForTimeout(700);
+await pg.reload();await pg.waitForTimeout(700);await abrirConta();
 ok((await pg.textContent('#app')).includes('Paulo Ramos'),'admin vê a fila');await shot('5-admin-fila');
 await click(x('ad-rev','[data-s=aprovado]'));await pg.waitForTimeout(600);
 ok(await pg.evaluate(()=>Object.values(FF_STUB_DB.prof)[0].status==='aprovado'),'admin aprova');
@@ -70,7 +72,8 @@ ok(await pg.isVisible('.ct-req'),'aluna vê o pedido');await shot('7-pedido');
 await click(x('ct-resp','[data-a="1"]'));await pg.waitForTimeout(700);
 ok((await pg.textContent('#app')).includes('Meus profissionais'),'aceito');
 await click(x('ct-close'));await pg.waitForTimeout(300);
-await click(x('role-pro'));ok(await pg.isVisible('.ct'),'aluna não entra na área do professor');
+ok(await pg.isVisible('.ob, [data-act=ob-next]'),'aluna segue para o app depois do login');
+await click(x('role-back'));await click(x('role-pro'));ok(await pg.isVisible('.ct'),'aluna não entra na área do professor');
 await sair();
 // 7 personal vê aluna com alerta
 await login('paulo@teste.com');

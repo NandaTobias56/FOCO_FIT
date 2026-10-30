@@ -100,6 +100,7 @@ function renderPerfil(){
     <label class="f" for="pf-c">CREF<input type="text" id="pf-c" maxlength="20" value="${esc(p.cref||"")}"></label>
     <button class="btn pink full" data-x="pf-save">Salvar</button></div>
     <div class="sec"><h2>App</h2></div><div class="card stack">
+    ${CLOUD?`<button class="btn full" data-x="ct-open">Minha conta</button>`:""}
     <button class="btn full" data-x="pro-backup">Backup dos alunos</button>
     <button class="btn full" data-x="pro-exit">Usar o app como aluno(a)</button>
     ${FFN?`<button class="btn full" data-act="check-update">Procurar atualização</button>`:""}

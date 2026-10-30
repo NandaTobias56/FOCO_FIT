@@ -435,6 +435,7 @@ function speech(A,i,tired){
 }
 function render(){
   if(CT.open){renderConta();return}
+  if(precisaLogin()){renderConta();return}
   if(MODE==="pro"){renderPro();return}
   if(!S.profile&&!MODE&&!obStep){renderRole();return}
   $("#tabbar").hidden=!S.profile||!!obStep;
