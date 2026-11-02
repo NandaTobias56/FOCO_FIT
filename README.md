@@ -30,3 +30,7 @@ Sem `src/config.json` preenchido, o app funciona como antes (tudo só no celular
 4. Tornar alguém administrador direto no SQL: `update profiles set papel='admin' where id='<uuid>';`
 
 Regras do banco: `npm run test:db`. Telas: `tests/ui/conta.test.cjs` (servidor falso).
+
+## Projeto de dados (pós-graduação)
+
+A pasta [`analytics/`](analytics/README.md) tem o projeto de Analytics e BI construído sobre o app: contrato de eventos, dados sintéticos, lakehouse no Databricks, KPIs e o mapa das disciplinas.
