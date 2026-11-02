@@ -51,6 +51,15 @@ ok((await pg.textContent('#app')).includes('Paulo Ramos'),'admin vê a fila');aw
 ok((await pg.textContent(x('ad-conf'))).includes('CREF de MG')&&(await pg.getAttribute(x('ad-conf'),'data-t')).includes('012345-G/MG'),'atalho para conferir no conselho');
 await click(x('ad-rev','[data-s=aprovado]'));await pg.waitForTimeout(600);
 ok(await pg.evaluate(()=>Object.values(FF_STUB_DB.prof)[0].status==='aprovado'),'admin aprova');
+// admin vê o app como cada papel
+await click(x('ct-prev','[data-p=nutri]'));ok((await pg.textContent('#app')).includes('Prévia: tela de Nutricionista')&&(await pg.textContent('#app')).includes('Ana Exemplo'),'admin vê a tela do nutri com exemplo');
+await shot('5b-previa-nutri');
+await click(x('ct-pedir'));ok(/Prévia/.test(await toast()),'prévia não salva');
+await click(x('ct-prev','[data-p=""]'));ok(await pg.isVisible(x('ad-ver')),'volta para a fila');
+await click(x('ct-prev','[data-p=aluno]'));ok(await pg.isVisible('#ct-cod'),'admin vê a tela do aluno');
+await click(x('ct-prev','[data-p=""]'));
+await click(x('ct-to-pro'));await pg.waitForTimeout(400);ok((await pg.textContent('#app')).includes('FOCO FIT PRO'),'admin entra na área de treinos');
+await abrirConta();ok(await pg.isVisible(x('ad-ver')),'admin volta para a conta');
 await sair();
 // 4 aluna
 await signup('aluno','Maria Souza','maria@teste.com');

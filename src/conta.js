@@ -45,7 +45,7 @@ const PAPEL={aluno:"Aluno(a)",personal:"Personal trainer",nutri:"Nutricionista",
 const TIPO_R={alergia:"Alergia",intolerancia:"Intolerância",preferencia:"Não come"};
 const UFS="AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
 const papelDe=()=>ME&&ME.perfil?ME.perfil.papel:"";
-const proLiberado=()=>papelDe()==="personal"&&ME.prof&&ME.prof.status==="aprovado";
+const proLiberado=()=>papelDe()==="admin"||papelDe()==="personal"&&ME.prof&&ME.prof.status==="aprovado";
 const regTxt=p=>p?(p.conselho==="CREF"?"CREF "+p.registro:p.registro):"";
 const idade=n=>{if(!n)return "";const d=new Date(n),h=new Date();let a=h.getFullYear()-d.getFullYear();if(h<new Date(h.getFullYear(),d.getMonth(),d.getDate()))a--;return a+" anos"};
 const quando=ts=>{const d=new Date(ts);return d.getDate()+" "+MES[d.getMonth()]+" "+pad(d.getHours())+":"+pad(d.getMinutes())};
@@ -100,7 +100,7 @@ function renderConta(){
     h=`<header class="phead ct-h"><div class="pi ${p}">${esc((ME.perfil.nome||ME.email||"?")[0].toUpperCase())}</div><div><small>${esc(PAPEL[p]||"")}</small><b>${esc(ME.perfil.nome||ME.email)}</b></div><button class="btn sm ghost" data-x="ct-close" aria-label="Voltar ao app">✕</button></header>`;
     if(!CT.data)h+=`<div class="card ct-load">Carregando…</div>`;
     else if(CT.data.erro)h+=`<div class="card stack"><b>Não consegui carregar</b><div class="tip">${esc(CT.data.erro)}</div><button class="btn full" data-x="ct-reload">Tentar de novo</button></div>`;
-    else h+=p==="aluno"?hubAluno():p==="admin"?hubAdmin():hubProf();
+    else h+=p==="admin"&&CT.prev?prevHTML():p==="aluno"?hubAluno():p==="admin"?hubAdmin():hubProf();
     h+=`<div class="sec"><h2>Conta</h2></div><div class="card stack"><div class="tip">Entrou como <b>${esc(ME.email||"")}</b></div>
       <button class="btn full" data-x="ct-termos">Termos e privacidade</button>
       <button class="btn full" data-x="ct-sair">Sair da conta</button>
@@ -257,16 +257,31 @@ function openAlunoConta(v){const rs=CT.data.r.filter(r=>r.aluno_id===v.aluno_id)
 /* administrador */
 /* CRN tem busca nacional; CREF é por região, então abre a busca do conselho do estado */
 const consultaUrl=(c,uf)=>c==="CRN"?"https://cnn.cfn.org.br/application/index/consulta-nacional":"https://www.google.com/search?q="+encodeURIComponent(`CREF ${uf} consulta profissional registrado`);
+/* admin vê as telas de cada papel com dados de exemplo (não lê dados reais de alunos) */
+const DEMO_V=t=>[{id:"d1",status:"ativo",tipo:t,aluno_id:"a1",aluno:{nome:"Ana Exemplo",nascimento:"1995-04-10"},prof:{perfil:{nome:"Prof. Exemplo"}},criado_em:new Date().toISOString()},
+  {id:"d2",status:"pendente",tipo:t,aluno_id:"a2",aluno:{nome:"Bruno Exemplo"},prof:{perfil:{nome:"Nutri Exemplo"}},criado_em:new Date().toISOString()}];
+const DEMO_R=[{id:"r1",aluno_id:"a1",tipo:"alergia",item:"Amendoim",gravidade:"grave"},{id:"r2",aluno_id:"a1",tipo:"intolerancia",item:"Lactose",gravidade:"leve"}];
+function prevHTML(){const real=ME, dados=CT.data, t=CT.prev;
+  ME={...real,perfil:{...real.perfil,papel:t,codigo_vinculo:"FF-EXEMPLO1"},prof:t==="aluno"?null:{status:"aprovado",conselho:t==="nutri"?"CRN":"CREF",registro:t==="nutri"?"CRN-3 12345":"012345-G/SP",uf:"SP"}};
+  CT.data={v:DEMO_V(t==="aluno"?"personal":t),r:DEMO_R};
+  let h;try{h=t==="aluno"?hubAluno():hubProf()}finally{ME=real;CT.data=dados}
+  return `<div class="card stack ct-prev-bar"><b>Prévia: tela de ${PAPEL[t]}</b><div class="tip">Dados de exemplo. Os botões aqui não salvam nada.</div><button class="btn full" data-x="ct-prev" data-p="">Voltar para o admin</button></div><div class="ct-prev-area">${h}</div>`}
+function verComo(){return `<div class="sec"><h2>Ver o app como</h2></div><div class="card stack"><div class="tip">Use o seu login para ver cada parte do app.</div>
+  <button class="btn full" data-x="ct-ver-app">Aluno: o app do dia a dia</button>
+  <button class="btn full" data-x="ct-prev" data-p="aluno">Aluno: tela da conta (código e vínculos)</button>
+  <button class="btn full" data-x="ct-prev" data-p="personal">Personal: tela da conta</button>
+  <button class="btn cyan full" data-x="ct-to-pro">Personal: área de treinos</button>
+  <button class="btn full" data-x="ct-prev" data-p="nutri">Nutricionista: tela da conta</button></div>`}
 function hubAdmin(){const f=CT.data.fila, ver=CT.adm, l=f.filter(p=>ver==="pendente"?p.status==="pendente":p.status!=="pendente");
   let h=`<div class="card tip">Confira cada registro no site do conselho (CREF da região para personal, CRN da região para nutricionista): número ativo e nome igual ao da conta e do documento.</div>
     <div class="grid2" style="margin-top:12px"><button class="btn ${ver==="pendente"?"pink":""}" data-x="ad-ver" data-v="pendente">Para conferir (${f.filter(p=>p.status==="pendente").length})</button><button class="btn ${ver!=="pendente"?"pink":""}" data-x="ad-ver" data-v="feitos">Já revisados</button></div>`;
-  if(!l.length)return h+`<div class="card tip" style="margin-top:12px">Nada por aqui.</div>`;
+  if(!l.length)return h+`<div class="card tip" style="margin-top:12px">Nada por aqui.</div>`+verComo();
   return h+`<div class="stack" style="margin-top:12px">`+l.map(p=>`<div class="card stack ct-adm ${p.status}"><div><b>${esc(p.perfil?p.perfil.nome:"")}</b> <small class="ct-tag">${p.conselho==="CREF"?"Personal":"Nutri"}</small></div>
     <div class="ct-reg">${esc(regTxt(p))} · ${esc(p.uf)} · enviado ${quando(p.criado_em)}</div>
     ${p.status!=="pendente"?`<div class="tip">Status: <b>${esc(p.status)}</b>${p.motivo?" · "+esc(p.motivo):""}</div>`:""}
     <button class="btn pink full" data-x="ad-conf" data-c="${p.conselho}" data-u="${esc(p.uf)}" data-t="${esc((p.perfil?p.perfil.nome:"")+" · "+regTxt(p))}">${p.conselho==="CREF"?"Conferir no CREF de "+esc(p.uf):"Conferir no site do CFN"}</button>
     <button class="btn full" data-x="ad-doc" data-p="${esc(p.documento_path||"")}" ${p.documento_path?"":"disabled"}>${p.documento_path?"Ver documento":"Sem documento"}</button>
-    <div class="g3"><button class="btn green" data-x="ad-rev" data-id="${p.id}" data-s="aprovado">Aprovar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="recusado">Recusar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="bloqueado">Bloquear</button></div></div>`).join("")+`</div>`;
+    <div class="g3"><button class="btn green" data-x="ad-rev" data-id="${p.id}" data-s="aprovado">Aprovar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="recusado">Recusar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="bloqueado">Bloquear</button></div></div>`).join("")+`</div>`+verComo();
 }
 
 /* ---------- registros do dia vão para a nuvem (só aluno logado) ---------- */
@@ -281,13 +296,17 @@ function alergiaEm(txt){const t=" "+norm(txt)+" ";return lsGet(LSRS,[]).filter(r
 document.addEventListener("click",e=>{
   if(!CLOUD)return;const b=e.target.closest("[data-x]");if(!b)return;
   /* área do professor exige conta de personal com CREF aprovado */
+  /* prévia do admin: só navega, não salva */
+  if(CT.prev&&CT.open&&/^(ct-|rf-)/.test(b.dataset.x)&&!["ct-prev","ct-close","ct-termos","ct-to-pro","ct-sair"].includes(b.dataset.x)){e.stopImmediatePropagation();e.preventDefault();toast("Prévia: aqui os botões não salvam nada");return}
   if((b.dataset.x==="role-pro"||b.dataset.x==="to-pro")&&!proLiberado()){e.stopImmediatePropagation();e.preventDefault();openConta("pro")}
 },true);
 document.addEventListener("click",e=>{
   if(!CLOUD)return;const b=e.target.closest("[data-x]");if(!b)return;const X=b.dataset;
   switch(X.x){
     case "ct-open":openConta();break;
-    case "ct-close":closeConta();break;
+    case "ct-prev":CT.prev=X.p||null;render();window.scrollTo(0,0);break;
+    case "ct-ver-app":setMode("aluno");closeConta();break;
+    case "ct-close":CT.prev=null;closeConta();break;
     case "ct-step":CT.step=X.s;render();window.scrollTo(0,0);break;
     case "ct-papel":CT.nome=$("#ct-nome").value;CT.email=$("#ct-email").value;if(CT.papel!==X.p){CT.reg=null;CT.doc=null}CT.papel=X.p;render();break;
     case "ct-termos":e.preventDefault();openSheet(termosHTML());break;
@@ -306,7 +325,7 @@ document.addEventListener("click",e=>{
       if(papelDe()==="aluno")setTimeout(()=>{if(Object.keys(S.days).length&&!(lsGet(LSSY,{}).ts))syncTudo(true)},1500)});break;
     case "ct-aceite":run(async()=>{if(!aceitou()){toast("Marque as duas caixinhas para continuar");return}const t=new Date().toISOString();await API.salvarPerfil(ME.uid,{aceite_termos_em:t});ME.perfil.aceite_termos_em=t;setME(ME);aposEntrar();render();loadHub()});break;
     case "ct-reload":CT.data=null;render();loadHub();break;
-    case "ct-sair":run(async()=>{try{await API.sair()}catch(err){}setME(null);lsSet(LSRS,null);CT.data=null;CT.step="";CT.reg=null;CT.doc=null;setMode("");render();toast("Você saiu da conta")});break;
+    case "ct-sair":run(async()=>{try{await API.sair()}catch(err){}CT.prev=null;setME(null);lsSet(LSRS,null);CT.data=null;CT.step="";CT.reg=null;CT.doc=null;setMode("");render();toast("Você saiu da conta")});break;
     case "ct-excluir":openSheet(`<h2>Excluir sua conta?</h2><div class="sub">Apaga para sempre sua conta e tudo o que está na nuvem${papelDe()==="aluno"?" (registros, alergias, planos e avaliações)":""}, e desfaz todos os vínculos. O que está guardado neste celular continua aqui.</div>
       <label class="f" for="ex-conf">PARA CONFIRMAR, ESCREVA EXCLUIR<input type="text" id="ex-conf" autocapitalize="characters"></label>
       <div class="row-end"><button class="btn ghost" data-close="1">Cancelar</button><button class="btn" style="background:var(--red);border-color:var(--red)" data-x="ct-excluir-sim">Excluir para sempre</button></div>`);break;
@@ -331,7 +350,7 @@ document.addEventListener("click",e=>{
       const T={restricoes:"alergias",planos_treino:"plano de treino",planos_dieta:"dieta",avaliacoes:"avaliação",vinculos:"vínculo"}, A={INSERT:"criou",UPDATE:"alterou",DELETE:"apagou"};
       openSheet(`<h2>Quem mexeu nos seus dados</h2><div class="stack ct-audit">${l.length?l.map(x=>`<div><b>${esc(nm(x.ator_id))}</b> ${A[x.acao]||x.acao} ${T[x.tabela]||x.tabela}<small>${quando(x.em)}</small></div>`).join(""):`<div class="tip">Nada ainda.</div>`}</div><button class="btn full" data-close="1">Fechar</button>`)});break;
     /* profissional */
-    case "ct-to-pro":CT.open=false;setMode("pro");pv.aluno=null;if(!PRO){PRO={perfil:{nome:ME.perfil.nome,whats:"",cref:ME.prof.registro},alunos:[],videos:{},modelos:[],criado:Date.now()};proSave()}render();window.scrollTo(0,0);break;
+    case "ct-to-pro":CT.open=false;CT.prev=null;setMode("pro");pv.aluno=null;if(!PRO){PRO={perfil:{nome:ME.perfil.nome,whats:"",cref:ME.prof?ME.prof.registro:""},alunos:[],videos:{},modelos:[],criado:Date.now()};proSave()}render();window.scrollTo(0,0);break;
     case "ct-reg-edit":CT.editReg=true;CT.reg=null;render();break;
     case "ct-reg-cancel":CT.editReg=false;CT.reg=null;CT.doc=null;render();break;
     case "ct-reg-save":run(async()=>{regCollect();const e=regErro();if(e){toast(e);return}
