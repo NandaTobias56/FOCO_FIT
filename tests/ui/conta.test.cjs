@@ -22,22 +22,21 @@ ok(!(await pg.isVisible(x('ct-close')))&&!(await pg.isVisible(x('role-aluno'))),
 await shot('0-inicio');
 // 2 personal cria conta
 await click(x('ct-step','[data-s=criar]'));await click(x('ct-papel','[data-p=personal]'));
-ok(await pg.isVisible('#ct-nome'),'tela de criar conta');
-await shot('1-criar-conta');
+ok(await pg.isVisible('#ct-nome')&&await pg.isVisible('#rg-num'),'CREF pedido já na tela de criar conta');
 await pg.fill('#ct-nome','Paulo Ramos');await pg.fill('#ct-email','paulo@teste.com');
-await click(x('ct-send'));ok(/caixinhas/.test(await toast()),'sem aceite não envia');
-await pg.check('#ct-ok1');await pg.check('#ct-ok2');await click(x('ct-send'));
-ok(await pg.isVisible('#ct-otp'),'tela do código');await shot('2-codigo');
-await pg.fill('#ct-otp','999999');await click(x('ct-verify'));ok(/errado/.test(await toast()),'código errado avisa');
-await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(700);
-ok(await pg.isVisible('#rg-num'),'personal cai no cadastro do CREF');
+await pg.check('#ct-ok1');await pg.check('#ct-ok2');
+await click(x('ct-send'));ok(/número/.test(await toast()),'sem CREF não manda código');
 await pg.fill('#rg-num','12345');await pg.selectOption('#rg-uf','MG');await pg.waitForTimeout(200);
 ok((await pg.textContent('#rg-prev')).includes('012345-G/MG'),'monta o CREF no formato');
-await click(x('ct-reg-save'));ok(/foto/.test(await toast()),'exige documento');
+await click(x('ct-send'));ok(/foto/.test(await toast()),'exige documento');
 await pg.setInputFiles('#rg-doc',SC+'/cref.png');await pg.waitForTimeout(400);
-await shot('3-cadastro-cref');
-await click(x('ct-reg-save'));ok(/declara/.test(await toast()),'exige declaração');
-await pg.check('#ct-ok2');await click(x('ct-reg-save'));await pg.waitForTimeout(700);
+ok(await pg.inputValue('#ct-nome')==='Paulo Ramos','nome continua depois da foto');
+await pg.check('#ct-ok1');await pg.check('#ct-ok2');
+await shot('1-criar-conta');
+await click(x('ct-send'));
+ok(await pg.isVisible('#ct-otp'),'tela do código');await shot('2-codigo');
+await pg.fill('#ct-otp','999999');await click(x('ct-verify'));ok(/errado/.test(await toast()),'código errado avisa');
+await pg.fill('#ct-otp','123456');await click(x('ct-verify'));await pg.waitForTimeout(900);
 ok((await pg.textContent('#app')).includes('em análise'),'status em análise');await shot('4-em-analise');
 ok(await pg.evaluate(()=>Object.keys(FF_STUB_DB.docs).length===1),'documento enviado');
 // pendente não abre a área

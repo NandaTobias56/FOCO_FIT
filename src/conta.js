@@ -125,6 +125,7 @@ function loginHTML(){
     <div class="ct-papeis">${r("aluno","Aluno(a)","Sigo meu plano de treino e dieta")}${r("personal","Personal trainer","Tenho CREF e acompanho alunos")}${r("nutri","Nutricionista","Tenho CRN e monto dietas")}</div>
     <label class="f" for="ct-nome">SEU NOME COMPLETO<input type="text" id="ct-nome" maxlength="80" autocomplete="name" value="${esc(CT.nome)}" placeholder="${CT.papel==="aluno"?"ex.: Maria Silva":"como está no registro do conselho"}"></label>
     <label class="f" for="ct-email">SEU E-MAIL<input type="email" id="ct-email" autocomplete="email" inputmode="email" value="${esc(CT.email)}" placeholder="voce@email.com"></label>
+    ${CT.papel!=="aluno"?regForm(null,true):""}
     ${aceiteBoxes()}
     <button class="btn pink big full" data-x="ct-send" data-c="1">Receber código no e-mail</button>${voltar}`}
   return `<h1 class="ct-t">Sua conta <span>Foco Fit</span></h1>
@@ -207,10 +208,12 @@ function hubProf(){const p=ME.prof, papel=papelDe(), d=CT.data;
     :`<div class="card tip">Quando um aluno aceitar o seu pedido, ele aparece aqui.</div>`;
   return h;
 }
-function regForm(p){const cref=papelDe()==="personal", f=CT.reg||(CT.reg=regDraft(p));
+const regPapel=()=>ME?papelDe():CT.papel;
+/* inline: dentro da tela de criar conta (sem título, declaração e botão próprios) */
+function regForm(p,inline){const cref=regPapel()==="personal", f=CT.reg||(CT.reg=regDraft(p));
   const opt=(l,v)=>l.map(x=>`<option ${String(x)===String(v)?"selected":""}>${x}</option>`).join("");
-  return `<div class="sec"><h2>Seu registro no ${cref?"CREF":"CRN"}</h2></div><div class="card stack">
-    <div class="tip">Obrigatório. Conferimos no conselho antes de liberar o vínculo com alunos.</div>
+  return `${inline?"":`<div class="sec"><h2>Seu registro no ${cref?"CREF":"CRN"}</h2></div>`}<div class="card stack">
+    <div class="tip">${inline?`<b>Seu registro no ${cref?"CREF":"CRN"}</b><br>`:""}Obrigatório. Conferimos no conselho antes de liberar o vínculo com alunos.</div>
     ${cref?`<div class="g3"><label class="f" for="rg-num">NÚMERO<input type="text" id="rg-num" inputmode="numeric" maxlength="6" value="${esc(f.num)}" placeholder="012345"></label>
       <label class="f" for="rg-cat">CATEGORIA<select id="rg-cat">${["G","P"].map(x=>`<option value="${x}" ${f.cat===x?"selected":""}>${x}</option>`).join("")}</select></label>
       <label class="f" for="rg-uf">ESTADO<select id="rg-uf">${opt(UFS,f.uf)}</select></label></div>`
@@ -219,16 +222,22 @@ function regForm(p){const cref=papelDe()==="personal", f=CT.reg||(CT.reg=regDraf
       <label class="f" for="rg-uf">ESTADO<select id="rg-uf">${opt(UFS,f.uf)}</select></label></div>`}
     <div class="ct-prev" id="rg-prev">Fica assim: <b>${esc(regMontar(f)||"—")}</b></div>
     <label class="f">FOTO DA CARTEIRA DO CONSELHO<span class="ct-file"><input type="file" id="rg-doc" accept="image/*,application/pdf"><span>${CT.doc?"✓ "+esc(CT.doc.name):(p&&p.documento_path?"✓ documento já enviado (toque para trocar)":"Toque para tirar foto ou escolher")}</span></span></label>
-    <label class="ctchk"><input type="checkbox" id="ct-ok2"><span>Declaro que este registro é meu e está ativo. Informação falsa leva ao bloqueio da conta.</span></label>
+    ${inline?"":`<label class="ctchk"><input type="checkbox" id="ct-ok2"><span>Declaro que este registro é meu e está ativo. Informação falsa leva ao bloqueio da conta.</span></label>
     <button class="btn pink big full" data-x="ct-reg-save">Enviar para análise</button>
-    ${CT.editReg?`<button class="btn ghost full" data-x="ct-reg-cancel">Cancelar</button>`:""}</div>`;
+    ${CT.editReg?`<button class="btn ghost full" data-x="ct-reg-cancel">Cancelar</button>`:""}`}</div>`;
 }
 function regDraft(p){const r=p&&p.registro||"";let m;
   if((m=r.match(/^(\d{6})-([GP])\/([A-Z]{2})$/)))return {num:m[1],cat:m[2],uf:p.uf||m[3]};
   if((m=r.match(/^(CRN-\d{1,2}) ?(\d+)/)))return {reg:m[1],num:m[2],uf:p.uf||"SP"};
   return {num:"",cat:"G",uf:"SP",reg:"CRN-3"}}
 function regCollect(){const f=CT.reg;["num","cat","uf","reg"].forEach(k=>{const el=$("#rg-"+k);if(el)f[k]=el.value.trim().toUpperCase()});f.num=f.num.replace(/\D/g,"")}
-function regMontar(f){if(!f.num)return "";return papelDe()==="personal"?f.num.padStart(6,"0")+"-"+(f.cat||"G")+"/"+f.uf:(f.reg||"CRN-3")+" "+f.num}
+function regErro(){const f=CT.reg, cref=regPapel()==="personal";
+  if(cref?!/^\d{1,6}$/.test(f.num):!/^\d{3,7}$/.test(f.num))return "Confira o número do registro";
+  if(!CT.doc&&!(ME&&ME.prof&&ME.prof.documento_path))return "Mande a foto da carteira do conselho";return ""}
+async function salvarRegistro(){const f=CT.reg, cref=regPapel()==="personal";let path=ME.prof&&ME.prof.documento_path;
+  if(CT.doc){const {blob,ext}=await encolher(CT.doc);if(blob.size>5242880)throw new Error("Arquivo grande demais (máximo 5 MB)");path=await API.enviarDoc(ME.uid,blob,ext)}
+  await API.salvarProf({id:ME.uid,conselho:cref?"CREF":"CRN",registro:regMontar(f),uf:f.uf,documento_path:path},!!ME.prof);CT.reg=null;CT.doc=null}
+function regMontar(f){if(!f.num)return "";return regPapel()==="personal"?f.num.padStart(6,"0")+"-"+(f.cat||"G")+"/"+f.uf:(f.reg||"CRN-3")+" "+f.num}
 /* foto grande vira JPEG de até 1600px (cabe no limite e sobe rápido) */
 async function encolher(file){
   if(!/^image\//.test(file.type)||file.type==="image/gif")return {blob:file,ext:file.type==="application/pdf"?"pdf":(file.type.split("/")[1]||"jpg")};
@@ -280,17 +289,19 @@ document.addEventListener("click",e=>{
     case "ct-open":openConta();break;
     case "ct-close":closeConta();break;
     case "ct-step":CT.step=X.s;render();window.scrollTo(0,0);break;
-    case "ct-papel":CT.nome=$("#ct-nome").value;CT.email=$("#ct-email").value;CT.papel=X.p;render();break;
+    case "ct-papel":CT.nome=$("#ct-nome").value;CT.email=$("#ct-email").value;if(CT.papel!==X.p){CT.reg=null;CT.doc=null}CT.papel=X.p;render();break;
     case "ct-termos":e.preventDefault();openSheet(termosHTML());break;
     case "ct-send":run(async()=>{const em=($("#ct-email").value||"").trim().toLowerCase(), criar=X.c==="1";
       if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(em)){toast("Confira o e-mail");return}
       let meta;if(criar){const n=($("#ct-nome").value||"").trim();if(n.length<3){toast("Escreva seu nome completo");return}
+        if(CT.papel!=="aluno"){regCollect();const e=regErro();if(e){toast(e);return}}
         if(!aceitou()){toast("Marque as duas caixinhas para continuar");return}CT.nome=n;CT.aceite=true;meta={papel:CT.papel,nome:n}}
       await API.sendCode(em,criar,meta);CT.email=em;CT.step="codigo";render();toast("Código enviado para "+em)});break;
     case "ct-resend":run(async()=>{await API.sendCode(CT.email,!!CT.aceite,CT.aceite?{papel:CT.papel,nome:CT.nome}:undefined);toast("Mandei outro código")});break;
     case "ct-verify":run(async()=>{const c=($("#ct-otp").value||"").replace(/\D/g,"");if(c.length<6){toast("O código tem 6 números ou mais");return}
       await API.verify(CT.email,c);await refreshME();
       if(ME&&CT.aceite&&!ME.perfil.aceite_termos_em){await API.salvarPerfil(ME.uid,{aceite_termos_em:new Date().toISOString()});ME.perfil.aceite_termos_em=new Date().toISOString();setME(ME)}
+      if(ME&&CT.aceite&&papelDe()!=="aluno"&&papelDe()!=="admin"&&CT.reg&&CT.doc&&!ME.prof){try{await salvarRegistro();await refreshME()}catch(err){toast(errMsg(err))}}
       CT.step="";CT.aceite=false;if(ME&&ME.perfil.aceite_termos_em)aposEntrar();render();window.scrollTo(0,0);confetti(80);ding("small");loadHub();
       if(papelDe()==="aluno")setTimeout(()=>{if(Object.keys(S.days).length&&!(lsGet(LSSY,{}).ts))syncTudo(true)},1500)});break;
     case "ct-aceite":run(async()=>{if(!aceitou()){toast("Marque as duas caixinhas para continuar");return}const t=new Date().toISOString();await API.salvarPerfil(ME.uid,{aceite_termos_em:t});ME.perfil.aceite_termos_em=t;setME(ME);aposEntrar();render();loadHub()});break;
@@ -323,14 +334,9 @@ document.addEventListener("click",e=>{
     case "ct-to-pro":CT.open=false;setMode("pro");pv.aluno=null;if(!PRO){PRO={perfil:{nome:ME.perfil.nome,whats:"",cref:ME.prof.registro},alunos:[],videos:{},modelos:[],criado:Date.now()};proSave()}render();window.scrollTo(0,0);break;
     case "ct-reg-edit":CT.editReg=true;CT.reg=null;render();break;
     case "ct-reg-cancel":CT.editReg=false;CT.reg=null;CT.doc=null;render();break;
-    case "ct-reg-save":run(async()=>{regCollect();const f=CT.reg, reg=regMontar(f), cref=papelDe()==="personal";
-      if(cref?!/^\d{1,6}$/.test(f.num):!/^\d{3,7}$/.test(f.num)){toast("Confira o número do registro");return}
-      if(!CT.doc&&!(ME.prof&&ME.prof.documento_path)){toast("Mande a foto da carteira do conselho");return}
+    case "ct-reg-save":run(async()=>{regCollect();const e=regErro();if(e){toast(e);return}
       const dc=$("#ct-ok2");if(!dc||!dc.checked){toast("Marque a declaração para continuar");return}
-      let path=ME.prof&&ME.prof.documento_path;
-      if(CT.doc){const {blob,ext}=await encolher(CT.doc);if(blob.size>5242880){toast("Arquivo grande demais (máximo 5 MB)");return}path=await API.enviarDoc(ME.uid,blob,ext)}
-      await API.salvarProf({id:ME.uid,conselho:cref?"CREF":"CRN",registro:reg,uf:f.uf,documento_path:path},!!ME.prof);
-      CT.editReg=false;CT.reg=null;CT.doc=null;toast("Enviado para análise");await loadHub()});break;
+      await salvarRegistro();CT.editReg=false;toast("Enviado para análise");await loadHub()});break;
     case "ct-pedir":run(async()=>{let c=($("#ct-pedir").value||"").trim().toUpperCase().replace(/\s/g,"");if(/^[0-9A-F]{8}$/.test(c))c="FF-"+c;
       if(!/^FF-[0-9A-F]{8}$/.test(c)){toast("O código tem o formato FF-1A2B3C4D");return}
       const r=await API.pedir(c);toast(r==="já existe"?"Você já pediu ou já está vinculado a esse aluno":"Pedido enviado. Agora o aluno aceita no app dele.");await loadHub()});break;
@@ -348,11 +354,11 @@ document.addEventListener("click",e=>{
   }
 });
 document.addEventListener("change",e=>{
-  if(!CT.open)return;const id=e.target.id||"";
-  if(id==="rg-doc"){CT.doc=e.target.files&&e.target.files[0]||null;regCollect();render()}
+  if(!CT.open&&!precisaLogin())return;const id=e.target.id||"";
+  if(id==="rg-doc"){CT.doc=e.target.files&&e.target.files[0]||null;regCollect();const n=$("#ct-nome"),m=$("#ct-email");if(n)CT.nome=n.value;if(m)CT.email=m.value;render()}
   else if(/^rg-/.test(id)){regCollect();const p=$("#rg-prev");if(p)p.innerHTML="Fica assim: <b>"+esc(regMontar(CT.reg)||"—")+"</b>"}
 });
-document.addEventListener("input",e=>{if(CT.open&&e.target.id==="rg-num"){regCollect();const p=$("#rg-prev");if(p)p.innerHTML="Fica assim: <b>"+esc(regMontar(CT.reg)||"—")+"</b>"}});
+document.addEventListener("input",e=>{if((CT.open||precisaLogin())&&e.target.id==="rg-num"){regCollect();const p=$("#rg-prev");if(p)p.innerHTML="Fica assim: <b>"+esc(regMontar(CT.reg)||"—")+"</b>"}});
 async function syncTudo(silencioso){const ks=Object.keys(S.days).sort();if(!ks.length){if(!silencioso)toast("Ainda não há registros");return}
   const sy=lsGet(LSSY,{});sy.p=[...new Set([...(sy.p||[]),...ks])];lsSet(LSSY,sy);
   await run(async()=>{while((lsGet(LSSY,{}).p||[]).length){const before=lsGet(LSSY,{}).p.length;await flushCloud();if(lsGet(LSSY,{}).p.length>=before)throw new Error("network")}
