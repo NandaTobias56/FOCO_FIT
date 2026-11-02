@@ -107,6 +107,31 @@ check((await rows(A, "select * from auditoria")).length >= 4, "aluno vê quem me
 check((await rows(B, "select * from auditoria")).length === 0, "outro aluno não vê a auditoria");
 await fails(P, "delete from auditoria", "ninguém apaga a auditoria");
 
+// eventos de uso (contrato v1)
+const EV = "insert into eventos(tipo, dia, ocorrido_em, plataforma, app_versao, sessao_id, props) values ";
+await as(A, EV + "('refeicao_registrada','2026-11-02', now(), 'android', '12', gen_random_uuid(), '{\"refeicao_id\":\"cafe\",\"status\":\"ok\"}')");
+check((await rows(A, "select aluno_id from eventos"))[0]?.aluno_id === A, "aluno grava evento e aluno_id vem do login");
+await fails(A, "insert into eventos(aluno_id, tipo, dia, ocorrido_em) values ($1,'app_aberto','2026-11-02', now())", "aluno não grava evento em nome de outro", [B]);
+await fails(A, "insert into eventos(tipo, dia, ocorrido_em, recebido_em) values ('app_aberto','2026-11-02', now(), '2020-01-01')", "app não escolhe a hora de recebimento");
+await fails(A, EV + "('tipo_inventado','2026-11-02', now(), 'web', null, null, '{}')", "tipo fora do contrato é recusado");
+await fails(A, EV + "('app_aberto','2026-11-02', now(), 'ios', null, null, '{}')", "plataforma fora do contrato é recusada");
+await fails(A, EV + "('app_aberto','2026-11-02', now(), 'web', null, null, '[1,2]')", "props precisa ser objeto");
+const evId = "11111111-1111-4111-8111-111111111111";
+const dup = () => as(A, "insert into eventos(id, tipo, dia, ocorrido_em) values ($1,'agua_copo','2026-11-02', now()) on conflict (id) do nothing", [evId]);
+await dup(); await dup();
+check((await rows(A, "select count(*)::int n from eventos where id=$1", [evId]))[0].n === 1, "reenvio do mesmo lote não duplica");
+check((await rows(A, "select * from eventos")).length === 2, "aluno lê os próprios eventos");
+await fails(A, "update eventos set tipo='app_aberto'", "ninguém altera evento");
+await fails(A, "delete from eventos", "ninguém apaga evento pelo app");
+check((await rows(B, "select * from eventos")).length === 0, "outro aluno não vê eventos");
+check((await rows(P, "select * from eventos")).length === 0, "personal vinculado não lê eventos crus");
+check((await rows(X, "select * from eventos")).length === 0, "admin não lê eventos crus");
+await fails(P, "insert into eventos(tipo, dia, ocorrido_em) values ('app_aberto','2026-11-02', now())", "profissional não grava eventos");
+await db.exec("set role anon");
+let anonEv = true; try { await db.query("insert into eventos(aluno_id, tipo, dia, ocorrido_em) values ($1,'app_aberto','2026-11-02', now())", [A]); anonEv = false } catch (e) {}
+await db.exec("reset role");
+check(anonEv, "sem login não grava evento");
+
 // revogar
 await as(A, "select revogar_vinculo($1)", [vP]);
 check((await rows(P, "select * from registros_dia")).length === 0, "acesso some quando o aluno revoga");
@@ -130,12 +155,14 @@ const codB = (await db.query("select codigo_vinculo c from profiles where id=$1"
 await as(Q, "select solicitar_vinculo($1)", [codB]);
 await as(B, "select responder_vinculo((select id from vinculos where aluno_id=$1), true)", [B]);
 await as(B, "insert into registros_dia(aluno_id, dia) values ($1, '2026-10-29')", [B]);
+await as(B, "insert into eventos(tipo, dia, ocorrido_em) values ('app_aberto','2026-10-29', now())");
 await as(N, "select excluir_minha_conta()");
 check((await db.query("select count(*)::int n from profiles where id=$1", [N])).rows[0].n === 0, "profissional exclui a própria conta");
 check((await db.query("select count(*)::int n from restricoes where item='lactose'")).rows[0].n === 1, "alergia anotada pelo nutri fica com o aluno");
 await as(B, "select excluir_minha_conta()");
 check((await db.query("select count(*)::int n from registros_dia where aluno_id=$1", [B])).rows[0].n === 0, "dados do aluno somem ao excluir a conta");
 check((await db.query("select count(*)::int n from vinculos where aluno_id=$1", [B])).rows[0].n === 0, "vínculos somem ao excluir a conta");
+check((await db.query("select count(*)::int n from eventos where aluno_id=$1", [B])).rows[0].n === 0, "eventos somem ao excluir a conta");
 await as(Q, "select excluir_minha_conta()");
 check((await db.query("select count(*)::int n from storage.objects where name like $1", [Q + "/%"])).rows[0].n === 0, "documento some ao excluir a conta");
 

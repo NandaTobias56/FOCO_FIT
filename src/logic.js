@@ -146,7 +146,7 @@ async function connectDb(){
     if(snap.empty){if(S.profile){queue("profile",{v:2,profile:S.profile});Object.keys(S.days).forEach(k=>queue("d"+k,{date:k,day:S.days[k]}))}return}
     const next={profile:null,days:{}};
     snap.forEach(doc=>{const d=doc.data()||{};if(doc.id==="pro"){if(d.pro&&!PRO){PRO=d.pro;try{localStorage.setItem(LSP,JSON.stringify(PRO))}catch(e){}}}else if(doc.id==="profile")next.profile=d.profile||null;else if(d.date)next.days[d.date]=d.day||{}});
-    if(next.profile){S=next;lsSave();lastLevel=null;render()}
+    if(next.profile){S=next;lsSave();evFoto();lastLevel=null;render()}
   }catch(e){console.warn("db",e)}
 }
 
@@ -1002,7 +1002,7 @@ document.addEventListener("click",e=>{
     case "sos-eat":stopTimers();closeSheet();view.tab="doces";render();setTimeout(()=>{const el=$(".sec:nth-of-type(2)");if(el)el.scrollIntoView({behavior:"smooth"})},50);toast("Escolha um da lista verde, numa porção só");break;
     case "ai-sweet":aiSweet();break;
     case "add-w":{const v=num($("#w-kg").value);if(!v||v<30||v>300){toast("Digite o peso em kg, ex.: 72,5");break}
-      const p=S.profile;p.pesos=(p.pesos||[]).filter(w=>w.d!==todayKey());p.pesos.push({d:todayKey(),kg:v});if(!num(p.pesoInicial))p.pesoInicial=v;saveProfile();render();toast("Peso salvo");break}
+      const p=S.profile;p.pesos=(p.pesos||[]).filter(w=>w.d!==todayKey());p.pesos.push({d:todayKey(),kg:v});evento("peso_registrado",{kg:v});if(!num(p.pesoInicial))p.pesoInicial=v;saveProfile();render();toast("Peso salvo");break}
     case "ob-next":obCollect();if(obStep===1&&!draft.nome.trim()){draft.nome="Você"}
       if(obStep===1&&pendingPlan){profileFromPlan(pendingPlan);pendingPlan=null;incoming=null;obStep=4;try{history.replaceState(null,"",location.pathname)}catch(e){}render();window.scrollTo(0,0);ding("big");break}
       obStep++;render();window.scrollTo(0,0);break;
@@ -1024,7 +1024,7 @@ document.addEventListener("click",e=>{
       <label class="f" for="bk-in">RESTAURAR: COLE O BACKUP AQUI<textarea id="bk-in" rows="4"></textarea></label>
       <button class="btn full" data-act="bk-restore">Restaurar backup</button><button class="btn ghost full" data-close="1">Fechar</button>`);break;
     case "bk-copy":{const txt=JSON.stringify(PRO?{...S,pro:PRO}:S);navigator.clipboard.writeText(txt).then(()=>toast("Backup copiado"),()=>{const t=$("#bk-in");t.value=txt;t.select();toast("Selecione e copie o texto")});break}
-    case "bk-restore":{try{const o=JSON.parse($("#bk-in").value);if(!o||!o.profile||typeof o.days!=="object")throw 0;S={profile:o.profile,days:o.days};if(o.pro){PRO=o.pro;proSave()}saveProfile();Object.keys(S.days).forEach(x=>saveDay(x));closeSheet();lastLevel=null;render();toast("Backup restaurado")}catch(e){toast("Esse texto não é um backup do Foco Fit")}break}
+    case "bk-restore":{try{const o=JSON.parse($("#bk-in").value);if(!o||!o.profile||typeof o.days!=="object")throw 0;S={profile:o.profile,days:o.days};if(o.pro){PRO=o.pro;proSave()}saveProfile();evSemEventos(()=>Object.keys(S.days).forEach(x=>saveDay(x)));closeSheet();lastLevel=null;render();toast("Backup restaurado")}catch(e){toast("Esse texto não é um backup do Foco Fit")}break}
     case "notif-ask":askNotif().then(refreshNotifSheet);break;
     case "notif-exact":try{LN.changeExactNotificationSetting().then(r=>{exactOk=r&&r.exact_alarm;refreshNotifSheet()})}catch(e){}break;
     case "notif-test":if(LN){(async()=>{if(notifPerm!=="granted"&&!(await askNotif())){toast("Libere as notificações nos ajustes do celular");return}
@@ -1048,7 +1048,7 @@ document.addEventListener("click",e=>{
     case "reset":openSheet(`<h2>Apagar tudo?</h2><p style="margin:0">Isso apaga seu personagem, XP, refeições e pesos. Não dá para desfazer.</p>
         <div class="row-end"><button class="btn ghost" data-close="1">Cancelar</button><button class="btn" style="background:var(--red);border-color:var(--red)" data-act="reset-yes">Apagar</button></div>`);break;
     case "reset-yes":{const ids=["profile",...Object.keys(S.days).map(x=>"d"+x)];if(col)ids.forEach(id=>col.doc(id).delete().catch(()=>{}));
-      S={profile:null,days:{}};lsSave();closeSheet();lastLevel=null;lastComplete=null;draft=null;ob=null;ds={};obStep=0;render();break}
+      S={profile:null,days:{}};lsSave();evFoto();closeSheet();lastLevel=null;lastComplete=null;draft=null;ob=null;ds={};obStep=0;render();break}
   }
   if(D.cmin){const d=day(k);d.cardio=+D.cmin;saveDay(k);closeSheet();reward(before,k);render()}
 });
@@ -1138,6 +1138,8 @@ async function syncNotifs(){
 }
 function onNotifTap(actionId,extra){
   const t=todayKey(); view.tab="hoje"; view.day=t; closeSheet();
+  const nk={meal:"refeicao",treino:"treino",agua:"agua",noite:"lembrete"}[extra&&extra.kind];
+  if(nk)evento("notificacao_tocada",{tipo:nk,acao:actionId==="ok"?"ok":"abrir"},t);
   if(!S.profile){render();return}
   const before=dayInfo(t).xp;
   if(extra.kind==="meal"){

@@ -31,6 +31,7 @@ const API = window.FF_API_STUB||{
   async fila(){return ok_(sbc().from("profissionais").select("*,perfil:profiles!profissionais_id_fkey(nome)").order("criado_em",{ascending:true}))},
   async revisar(id,status,motivo){await ok_(sbc().rpc("revisar_profissional",{prof:id,novo_status:status,motivo_txt:motivo||null}))},
   async docUrl(path){return (await ok_(sbc().storage.from("documentos").createSignedUrl(path,300))).signedUrl},
+  async eventos(rows){await ok_(sbc().from("eventos").upsert(rows,{onConflict:"id",ignoreDuplicates:true}))},
   async syncDias(uid,rows){await ok_(sbc().from("registros_dia").upsert(rows.map(([dia,dados])=>({aluno_id:uid,dia,dados,atualizado_em:new Date().toISOString()}))))},
   async excluir(uid){try{const l=await ok_(sbc().storage.from("documentos").list(uid));if(l.length)await sbc().storage.from("documentos").remove(l.map(f=>uid+"/"+f.name))}catch(e){}
     await ok_(sbc().rpc("excluir_minha_conta"));await sbc().auth.signOut()}
@@ -147,6 +148,7 @@ function aceiteHTML(){CT.papel=papelDe()||"aluno";
 function termosHTML(){return `<h2>Termos e privacidade</h2><div class="ct-termos">
   <p><b>Rascunho para revisão jurídica.</b></p>
   <p><b>O que guardamos:</b> nome, e-mail, data de nascimento, e os dados que você registra no app (refeições, água, treinos, cardio, peso, medidas, alergias e restrições). Dados de saúde são dados pessoais sensíveis pela LGPD (Lei 13.709/2018) e só são usados com o seu consentimento.</p>
+  <p><b>Uso do app:</b> registramos quando você usa cada função (por exemplo, refeição marcada, treino feito, copo d'água, notificação tocada) para medir e melhorar o app. Em estudos e relatórios, esses dados são usados sem seu nome nem e-mail.</p>
   <p><b>Quem vê:</b> você. Um personal ou nutricionista só vê seus dados depois que <b>você aceita</b> o pedido de vínculo, e para de ver na hora em que você desfaz. Nossa equipe de administração confere registros profissionais, mas não tem acesso aos seus dados de saúde.</p>
   <p><b>Profissionais:</b> todo personal precisa de CREF e todo nutricionista de CRN, conferidos por nós antes de poder se vincular a alunos. Prescrever dieta é atribuição do nutricionista; treino é do profissional de educação física.</p>
   <p><b>Seus direitos:</b> ver, corrigir, levar e apagar seus dados. Em Conta &gt; Excluir minha conta, tudo é apagado de forma definitiva.</p>
@@ -286,7 +288,7 @@ function hubAdmin(){const f=CT.data.fila, ver=CT.adm, l=f.filter(p=>ver==="pende
 
 /* ---------- registros do dia vão para a nuvem (só aluno logado) ---------- */
 let syT=null;
-function cloudDay(k){if(!CLOUD||papelDe()!=="aluno")return;const sy=lsGet(LSSY,{});sy.p=[...new Set([...(sy.p||[]),k])];lsSet(LSSY,sy);clearTimeout(syT);syT=setTimeout(flushCloud,3000)}
+function cloudDay(k){evDia(k);if(!CLOUD||papelDe()!=="aluno")return;const sy=lsGet(LSSY,{});sy.p=[...new Set([...(sy.p||[]),k])];lsSet(LSSY,sy);clearTimeout(syT);syT=setTimeout(flushCloud,3000)}
 async function flushCloud(){const sy=lsGet(LSSY,{}), ks=(sy.p||[]).slice(0,200);if(!ks.length||!ME)return;
   try{await API.syncDias(ME.uid,ks.map(k=>[k,S.days[k]||{}]));const n=lsGet(LSSY,{});n.p=(n.p||[]).filter(k=>!ks.includes(k));n.ts=Date.now();lsSet(LSSY,n);if(n.p.length)syT=setTimeout(flushCloud,500)}catch(e){}}
 /* alimento registrado que bate com alergia do aluno */
@@ -383,8 +385,54 @@ async function syncTudo(silencioso){const ks=Object.keys(S.days).sort();if(!ks.l
   await run(async()=>{while((lsGet(LSSY,{}).p||[]).length){const before=lsGet(LSSY,{}).p.length;await flushCloud();if(lsGet(LSSY,{}).p.length>=before)throw new Error("network")}
     if(!silencioso)toast(ks.length+" dia(s) enviados para a nuvem");if(CT.open)render()})}
 
+/* ---------- eventos de uso (contrato de eventos v1, para a análise de dados) ----------
+   Só para aluno logado. Cada evento entra numa fila no aparelho (funciona offline) e sobe em lotes.
+   O id é gerado aqui, então reenviar um lote não duplica nada no banco. */
+const LSEV="focofit.eventos", EV_MAX=3000, EV_LOTE=200;
+function uuid(){try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}
+  const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=b[6]&15|64;b[8]=b[8]&63|128;
+  const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`}
+let evSessao=uuid(), evFotoDias={}, evMudo=false, evT=null, evOculto=0, evEnviando=false;
+const evLigado=()=>CLOUD&&!!ME&&papelDe()==="aluno";
+const evCopia=d=>JSON.parse(JSON.stringify(d||{}));
+const evSlug=s=>norm(s).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+function evento(tipo,props,dia){if(evMudo||!evLigado())return;
+  const f=lsGet(LSEV,[]);
+  f.push({id:uuid(),u:ME.uid,tipo,dia:dia||todayKey(),ocorrido_em:new Date().toISOString(),
+    plataforma:window.FFNative?"android":"web",app_versao:window.FF_BUILD?String(window.FF_BUILD):null,sessao_id:evSessao,props:props||{}});
+  lsSet(LSEV,f.length>EV_MAX?f.slice(-EV_MAX):f);
+  clearTimeout(evT);evT=setTimeout(enviarEventos,5000)}
+/* foto dos dias como estavam: saveDay compara o dia novo com a foto e descobre o que mudou */
+function evFoto(){evFotoDias={};for(const k in S.days)evFotoDias[k]=evCopia(S.days[k])}
+function evDia(k){const p=evFotoDias[k]||{}, d=S.days[k]||{};evFotoDias[k]=evCopia(d);
+  if(evMudo||!evLigado())return;
+  const pm=p.meals||{}, dm=d.meals||{};
+  for(const id in dm)if(JSON.stringify(dm[id])!==JSON.stringify(pm[id]))evento("refeicao_registrada",{refeicao_id:id,status:dm[id].s},k);
+  for(const id in pm)if(!(id in dm))evento("refeicao_desfeita",{refeicao_id:id},k);
+  if(d.treino&&!p.treino)evento("treino_feito",{grupo:evSlug((d.tlog&&d.tlog.nome)||treinoDo(k))||"livre"},k);
+  if(p.treino&&!d.treino)evento("treino_desfeito",{},k);
+  const cm=(d.cardio||0)-(p.cardio||0);if(cm>0)evento("cardio_registrado",{minutos:Math.round(cm)},k);
+  const a0=p.agua||0, ag=(d.agua||0)-a0;
+  for(let i=1;i<=Math.abs(ag);i++)evento("agua_copo",{delta:ag>0?1:-1,total_dia:a0+(ag>0?i:-i)},k);
+  if(d.doce&&!p.doce)evento("doce_sos_vencido",{},k);
+  if(d.bau&&!p.bau)evento("bau_aberto",{premio:String(d.bau)},k);
+  if(d.promessa&&d.promessa!==p.promessa)evento("promessa_feita",{texto:String(d.promessa).slice(0,200)},k);
+}
+/* restaurar backup ou apagar tudo não é uso: grava sem gerar eventos e tira uma foto nova */
+function evSemEventos(fn){evMudo=true;try{fn()}finally{evMudo=false;evFoto()}}
+async function enviarEventos(){if(evEnviando||!evLigado()||!API.eventos)return;evEnviando=true;
+  try{for(;;){const lote=lsGet(LSEV,[]).filter(e=>e.u===ME.uid).slice(0,EV_LOTE);if(!lote.length)break;
+      try{await API.eventos(lote.map(({u,...e})=>({...e,aluno_id:u})))}
+      catch(e){if(!/^2[23]/.test(String(e&&e.code||"")))throw e} // dado recusado pelo banco: descarta o lote para a fila não travar
+      const ids=new Set(lote.map(e=>e.id));lsSet(LSEV,lsGet(LSEV,[]).filter(e=>!ids.has(e.id)))}
+  }catch(e){}finally{evEnviando=false}}
+function evInicio(){evFoto();evento("app_aberto",{})}
+/* voltar ao app depois de 30 min fora conta como nova abertura (nova sessão) */
+document.addEventListener("visibilitychange",()=>{if(document.hidden){evOculto=Date.now();enviarEventos()}
+  else if(evOculto&&Date.now()-evOculto>30*60000){evSessao=uuid();evOculto=0;evento("app_aberto",{})}});
+
 /* início: confere a sessão e não deixa a área do professor aberta sem CREF aprovado */
 if(CLOUD){
   if(MODE==="pro"&&!proLiberado())setMode("");
-  refreshME().then(()=>{if(MODE==="pro"&&!proLiberado()){setMode("");render()}if(CT.open)render();if(papelDe()==="aluno"){flushCloud();API.restricoes([ME.uid]).then(r=>lsSet(LSRS,r.map(x=>({t:x.tipo,i:x.item,g:x.gravidade})))).catch(()=>{})}}).catch(()=>{});
+  refreshME().then(()=>{if(MODE==="pro"&&!proLiberado()){setMode("");render()}if(CT.open)render();if(papelDe()==="aluno"){flushCloud();enviarEventos();API.restricoes([ME.uid]).then(r=>lsSet(LSRS,r.map(x=>({t:x.tipo,i:x.item,g:x.gravidade})))).catch(()=>{})}}).catch(()=>{});
 }

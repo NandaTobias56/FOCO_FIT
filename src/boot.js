@@ -1,5 +1,5 @@
 /* ---------- início ---------- */
-lsLoad(); render();
+lsLoad(); evInicio(); render();
 if(LN)notifSetup().then(()=>{queueNotifSync(200);checkUpdate()});
 try{const t=JSON.parse(localStorage.getItem("focofit.timer")||"null");if(t&&t.kind==="cardio"&&S.profile)startCardio(t.mins,t)}catch(e){}
 connectDb();
