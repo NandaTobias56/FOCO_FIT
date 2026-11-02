@@ -246,7 +246,8 @@ function openAlunoConta(v){const rs=CT.data.r.filter(r=>r.aluno_id===v.aluno_id)
     <button class="btn full" data-close="1">Fechar</button>`)}
 
 /* administrador */
-const CONSULTA={CREF:"https://www.confef.org.br/confefv2/registro/",CRN:"https://cnn.cfn.org.br/application/index/consulta-nacional"};
+/* CRN tem busca nacional; CREF é por região, então abre a busca do conselho do estado */
+const consultaUrl=(c,uf)=>c==="CRN"?"https://cnn.cfn.org.br/application/index/consulta-nacional":"https://www.google.com/search?q="+encodeURIComponent(`CREF ${uf} consulta profissional registrado`);
 function hubAdmin(){const f=CT.data.fila, ver=CT.adm, l=f.filter(p=>ver==="pendente"?p.status==="pendente":p.status!=="pendente");
   let h=`<div class="card tip">Confira cada registro no site do conselho (CREF da região para personal, CRN da região para nutricionista): número ativo e nome igual ao da conta e do documento.</div>
     <div class="grid2" style="margin-top:12px"><button class="btn ${ver==="pendente"?"pink":""}" data-x="ad-ver" data-v="pendente">Para conferir (${f.filter(p=>p.status==="pendente").length})</button><button class="btn ${ver!=="pendente"?"pink":""}" data-x="ad-ver" data-v="feitos">Já revisados</button></div>`;
@@ -254,7 +255,7 @@ function hubAdmin(){const f=CT.data.fila, ver=CT.adm, l=f.filter(p=>ver==="pende
   return h+`<div class="stack" style="margin-top:12px">`+l.map(p=>`<div class="card stack ct-adm ${p.status}"><div><b>${esc(p.perfil?p.perfil.nome:"")}</b> <small class="ct-tag">${p.conselho==="CREF"?"Personal":"Nutri"}</small></div>
     <div class="ct-reg">${esc(regTxt(p))} · ${esc(p.uf)} · enviado ${quando(p.criado_em)}</div>
     ${p.status!=="pendente"?`<div class="tip">Status: <b>${esc(p.status)}</b>${p.motivo?" · "+esc(p.motivo):""}</div>`:""}
-    <button class="btn pink full" data-x="ad-conf" data-c="${p.conselho}" data-t="${esc((p.perfil?p.perfil.nome:"")+" · "+regTxt(p))}">Conferir no site do ${p.conselho==="CREF"?"CONFEF":"CFN"}</button>
+    <button class="btn pink full" data-x="ad-conf" data-c="${p.conselho}" data-u="${esc(p.uf)}" data-t="${esc((p.perfil?p.perfil.nome:"")+" · "+regTxt(p))}">${p.conselho==="CREF"?"Conferir no CREF de "+esc(p.uf):"Conferir no site do CFN"}</button>
     <button class="btn full" data-x="ad-doc" data-p="${esc(p.documento_path||"")}" ${p.documento_path?"":"disabled"}>${p.documento_path?"Ver documento":"Sem documento"}</button>
     <div class="g3"><button class="btn green" data-x="ad-rev" data-id="${p.id}" data-s="aprovado">Aprovar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="recusado">Recusar</button><button class="btn" data-x="ad-rev" data-id="${p.id}" data-s="bloqueado">Bloquear</button></div></div>`).join("")+`</div>`;
 }
@@ -337,7 +338,7 @@ document.addEventListener("click",e=>{
     /* administrador */
     case "ad-ver":CT.adm=X.v;render();break;
     /* os conselhos não têm consulta por API: copia nome e número e abre a busca pública */
-    case "ad-conf":copyText(X.t,"Nome e registro copiados: cole na busca");openExt(CONSULTA[X.c]);break;
+    case "ad-conf":copyText(X.t,"Nome e registro copiados: cole na busca");openExt(consultaUrl(X.c,X.u));break;
     case "ad-doc":run(async()=>{openExt(await API.docUrl(X.p))});break;
     case "ad-rev":if(X.s==="aprovado")run(async()=>{await API.revisar(X.id,"aprovado");toast("Aprovado");await loadHub()});
       else openSheet(`<h2>${X.s==="recusado"?"Recusar":"Bloquear"} cadastro</h2><div class="sub">O profissional vai ver este motivo.</div>
