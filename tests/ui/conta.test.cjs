@@ -49,6 +49,7 @@ await signup('aluno','Equipe Foco','adm@teste.com');
 await pg.evaluate(()=>{const s=FF_STUB_DB.sess.uid;FF_STUB_DB.profiles[s].papel='admin';FF_STUB_DB.profiles[s].codigo_vinculo=null;FF_STUB_SAVE()});
 await pg.reload();await pg.waitForTimeout(700);await abrirConta();
 ok((await pg.textContent('#app')).includes('Paulo Ramos'),'admin vê a fila');await shot('5-admin-fila');
+ok((await pg.textContent(x('ad-conf'))).includes('CONFEF')&&(await pg.getAttribute(x('ad-conf'),'data-t')).includes('012345-G/MG'),'atalho para conferir no conselho');
 await click(x('ad-rev','[data-s=aprovado]'));await pg.waitForTimeout(600);
 ok(await pg.evaluate(()=>Object.values(FF_STUB_DB.prof)[0].status==='aprovado'),'admin aprova');
 await sair();
